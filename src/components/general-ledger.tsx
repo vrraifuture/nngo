@@ -80,6 +80,7 @@ export default function GeneralLedger({
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showBatchAddDialog, setShowBatchAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [showAddAccountDialog, setShowAddAccountDialog] = useState(false);
@@ -106,6 +107,22 @@ export default function GeneralLedger({
     credit: "",
     reference_number: "",
   });
+  const [batchEntries, setBatchEntries] = useState<
+    {
+      id: string;
+      account_code: string;
+      account_name: string;
+      description: string;
+      debit: string;
+      credit: string;
+      reference_number: string;
+    }[]
+  >([]);
+  const [batchDate, setBatchDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [isBalanced, setIsBalanced] = useState(false);
+  const [forceSubmit, setForceSubmit] = useState(false);
   const [newAccount, setNewAccount] = useState({
     code: "",
     name: "",
@@ -485,6 +502,163 @@ export default function GeneralLedger({
       normal_balance: "debit",
     });
     setShowAddAccountDialog(false);
+  };
+
+  // Calculate batch totals
+  const getBatchTotalDebits = () => {
+    return batchEntries.reduce(
+      (sum, entry) => sum + (parseFloat(entry.debit) || 0),
+      0,
+    );
+  };
+
+  const getBatchTotalCredits = () => {
+    return batchEntries.reduce(
+      (sum, entry) => sum + (parseFloat(entry.credit) || 0),
+      0,
+    );
+  };
+
+  // Check if batch is balanced
+  const checkBatchBalance = () => {
+    const totalDebits = getBatchTotalDebits();
+    const totalCredits = getBatchTotalCredits();
+    const balanced = Math.abs(totalDebits - totalCredits) < 0.01;
+    setIsBalanced(balanced);
+    return balanced;
+  };
+
+  // Add new entry to batch
+  const addToBatch = () => {
+    const newBatchEntry = {
+      id: Date.now().toString(),
+      account_code: "",
+      account_name: "",
+      description: "",
+      debit: "",
+      credit: "",
+      reference_number: "",
+    };
+    setBatchEntries([...batchEntries, newBatchEntry]);
+  };
+
+  // Remove entry from batch
+  const removeFromBatch = (id: string) => {
+    const updatedEntries = batchEntries.filter((entry) => entry.id !== id);
+    setBatchEntries(updatedEntries);
+    // Recalculate balance after removal
+    setTimeout(() => checkBatchBalance(), 100);
+  };
+
+  // Update batch entry
+  const updateBatchEntry = (id: string, field: string, value: string) => {
+    const updatedEntries = batchEntries.map((entry) => {
+      if (entry.id === id) {
+        const updated = { ...entry, [field]: value };
+
+        // If updating account code, also update account name
+        if (field === "account_code") {
+          const selectedAccount = chartOfAccounts.find(
+            (acc) => acc.code === value,
+          );
+          updated.account_name = selectedAccount?.name || "";
+        }
+
+        // Ensure only debit OR credit is filled
+        if (field === "debit" && value) {
+          updated.credit = "";
+        } else if (field === "credit" && value) {
+          updated.debit = "";
+        }
+
+        return updated;
+      }
+      return entry;
+    });
+    setBatchEntries(updatedEntries);
+
+    // Recalculate balance after update
+    setTimeout(() => checkBatchBalance(), 100);
+  };
+
+  // Submit batch entries
+  const handleSubmitBatch = () => {
+    // Check permissions
+    if (userRole !== "admin" && userRole !== "accountant") {
+      alert("You don't have permission to add ledger entries.");
+      return;
+    }
+
+    // Validate entries
+    if (batchEntries.length === 0) {
+      alert("Please add at least one entry to the batch.");
+      return;
+    }
+
+    // Check if all entries are valid
+    const invalidEntries = batchEntries.filter(
+      (entry) =>
+        !entry.account_code ||
+        !entry.description ||
+        (!entry.debit && !entry.credit) ||
+        (parseFloat(entry.debit || "0") === 0 &&
+          parseFloat(entry.credit || "0") === 0),
+    );
+
+    if (invalidEntries.length > 0) {
+      alert(
+        `Please complete all required fields for all entries. ${invalidEntries.length} entries are incomplete.`,
+      );
+      return;
+    }
+
+    // Check balance unless force submit is enabled
+    const balanced = checkBatchBalance();
+    if (!balanced && !forceSubmit) {
+      const totalDebits = getBatchTotalDebits();
+      const totalCredits = getBatchTotalCredits();
+      const difference = Math.abs(totalDebits - totalCredits);
+
+      const confirmMessage = `The batch is not balanced!\n\nTotal Debits: ${getDefaultCurrency()}${totalDebits.toLocaleString()}\nTotal Credits: ${getDefaultCurrency()}${totalCredits.toLocaleString()}\nDifference: ${getDefaultCurrency()}${difference.toLocaleString()}\n\nPlease check the "Force Submit" checkbox to proceed with unbalanced entries, or adjust the amounts to balance the entries.`;
+
+      alert(confirmMessage);
+      return;
+    }
+
+    // Convert batch entries to ledger entries
+    const newLedgerEntries = batchEntries.map((entry) => {
+      const selectedAccount = chartOfAccounts.find(
+        (acc) => acc.code === entry.account_code,
+      );
+
+      return {
+        id: `batch_${Date.now()}_${entry.id}`,
+        account_code: entry.account_code,
+        account_name: selectedAccount?.name || entry.account_name,
+        date: batchDate,
+        description: entry.description,
+        debit: parseFloat(entry.debit) || 0,
+        credit: parseFloat(entry.credit) || 0,
+        reference_number: entry.reference_number || undefined,
+        created_by: "Current User",
+        created_at: new Date().toISOString(),
+      };
+    });
+
+    // Add to ledger
+    const updatedEntries = [...ledgerEntries, ...newLedgerEntries];
+    saveLedgerEntries(updatedEntries);
+
+    // Reset batch
+    setBatchEntries([]);
+    setBatchDate(new Date().toISOString().split("T")[0]);
+    setIsBalanced(false);
+    setForceSubmit(false);
+    setShowBatchAddDialog(false);
+
+    alert(
+      `Successfully added ${newLedgerEntries.length} entries to the general ledger!`,
+    );
   };
 
   const handleAddEntry = () => {
@@ -1252,11 +1426,322 @@ export default function GeneralLedger({
                     </DialogContent>
                   </Dialog>
 
+                  <Dialog
+                    open={showBatchAddDialog}
+                    onOpenChange={setShowBatchAddDialog}
+                  >
+                    <DialogTrigger asChild>
+                      <Button className="flex items-center gap-2 mr-2">
+                        <Plus className="h-4 w-4" />
+                        Add Multiple Entries
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Add Multiple Ledger Entries</DialogTitle>
+                        <DialogDescription>
+                          Create multiple journal entries at once. Ensure debits
+                          equal credits for balanced books.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-6">
+                        {/* Batch Controls */}
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <div>
+                              <Label htmlFor="batch_date">
+                                Transaction Date *
+                              </Label>
+                              <Input
+                                id="batch_date"
+                                type="date"
+                                value={batchDate}
+                                onChange={(e) => setBatchDate(e.target.value)}
+                                className="w-40"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={addToBatch}
+                              className="flex items-center gap-2"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add Entry
+                            </Button>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-gray-600">
+                              Entries: {batchEntries.length}
+                            </div>
+                            <div
+                              className={`text-sm font-medium ${
+                                isBalanced ? "text-green-600" : "text-red-600"
+                              }`}
+                            >
+                              {isBalanced ? "✓ Balanced" : "⚠ Not Balanced"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Balance Summary */}
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="bg-green-50 p-4 rounded-lg">
+                            <div className="text-sm text-green-600 font-medium">
+                              Total Debits
+                            </div>
+                            <div className="text-xl font-bold text-green-800">
+                              {getDefaultCurrency()}
+                              {getBatchTotalDebits().toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="bg-red-50 p-4 rounded-lg">
+                            <div className="text-sm text-red-600 font-medium">
+                              Total Credits
+                            </div>
+                            <div className="text-xl font-bold text-red-800">
+                              {getDefaultCurrency()}
+                              {getBatchTotalCredits().toLocaleString()}
+                            </div>
+                          </div>
+                          <div
+                            className={`p-4 rounded-lg ${
+                              Math.abs(
+                                getBatchTotalDebits() - getBatchTotalCredits(),
+                              ) < 0.01
+                                ? "bg-green-50"
+                                : "bg-yellow-50"
+                            }`}
+                          >
+                            <div
+                              className={`text-sm font-medium ${
+                                Math.abs(
+                                  getBatchTotalDebits() -
+                                    getBatchTotalCredits(),
+                                ) < 0.01
+                                  ? "text-green-600"
+                                  : "text-yellow-600"
+                              }`}
+                            >
+                              Difference
+                            </div>
+                            <div
+                              className={`text-xl font-bold ${
+                                Math.abs(
+                                  getBatchTotalDebits() -
+                                    getBatchTotalCredits(),
+                                ) < 0.01
+                                  ? "text-green-800"
+                                  : "text-yellow-800"
+                              }`}
+                            >
+                              {getDefaultCurrency()}
+                              {Math.abs(
+                                getBatchTotalDebits() - getBatchTotalCredits(),
+                              ).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Batch Entries */}
+                        <div className="space-y-4">
+                          {batchEntries.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
+                              <Plus className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                              <p>
+                                No entries added yet. Click "Add Entry" to
+                                start.
+                              </p>
+                            </div>
+                          ) : (
+                            batchEntries.map((entry, index) => (
+                              <div
+                                key={entry.id}
+                                className="border rounded-lg p-4 bg-white"
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="font-medium text-gray-900">
+                                    Entry #{index + 1}
+                                  </h4>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => removeFromBatch(entry.id)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <Label>Account *</Label>
+                                    <Select
+                                      value={entry.account_code}
+                                      onValueChange={(value) =>
+                                        updateBatchEntry(
+                                          entry.id,
+                                          "account_code",
+                                          value,
+                                        )
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select account" />
+                                      </SelectTrigger>
+                                      <SelectContent className="max-h-[200px] overflow-y-auto">
+                                        {chartOfAccounts.map((account) => (
+                                          <SelectItem
+                                            key={account.code}
+                                            value={account.code}
+                                          >
+                                            {account.code} - {account.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <Label>Description *</Label>
+                                    <Input
+                                      value={entry.description}
+                                      onChange={(e) =>
+                                        updateBatchEntry(
+                                          entry.id,
+                                          "description",
+                                          e.target.value,
+                                        )
+                                      }
+                                      placeholder="Enter description"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-4 gap-4 mt-4">
+                                  <div>
+                                    <Label>Debit Amount</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={entry.debit}
+                                      onChange={(e) =>
+                                        updateBatchEntry(
+                                          entry.id,
+                                          "debit",
+                                          e.target.value,
+                                        )
+                                      }
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-center pt-6">
+                                    <div className="text-sm text-gray-500 font-medium">
+                                      OR
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <Label>Credit Amount</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={entry.credit}
+                                      onChange={(e) =>
+                                        updateBatchEntry(
+                                          entry.id,
+                                          "credit",
+                                          e.target.value,
+                                        )
+                                      }
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Reference</Label>
+                                    <Input
+                                      value={entry.reference_number}
+                                      onChange={(e) =>
+                                        updateBatchEntry(
+                                          entry.id,
+                                          "reference_number",
+                                          e.target.value,
+                                        )
+                                      }
+                                      placeholder="Optional"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        {/* Force Submit Option */}
+                        {!isBalanced && batchEntries.length > 0 && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                id="force_submit"
+                                checked={forceSubmit}
+                                onChange={(e) =>
+                                  setForceSubmit(e.target.checked)
+                                }
+                                className="rounded"
+                              />
+                              <Label
+                                htmlFor="force_submit"
+                                className="text-yellow-800 font-medium"
+                              >
+                                Force Submit Unbalanced Entries
+                              </Label>
+                            </div>
+                            <p className="text-sm text-yellow-700 mt-2">
+                              ⚠ Warning: This will allow you to submit entries
+                              where debits do not equal credits. This may cause
+                              accounting discrepancies. Only use this if you
+                              understand the implications.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex justify-end gap-2 pt-4 border-t">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setBatchEntries([]);
+                              setBatchDate(
+                                new Date().toISOString().split("T")[0],
+                              );
+                              setIsBalanced(false);
+                              setForceSubmit(false);
+                              setShowBatchAddDialog(false);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleSubmitBatch}
+                            disabled={
+                              batchEntries.length === 0 ||
+                              (!isBalanced && !forceSubmit)
+                            }
+                            className={`${!isBalanced && !forceSubmit ? "opacity-50 cursor-not-allowed" : ""}`}
+                          >
+                            Submit {batchEntries.length} Entries
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
                   <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                     <DialogTrigger asChild>
-                      <Button className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
                         <Plus className="h-4 w-4" />
-                        Add Entry
+                        Add Single Entry
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl">
