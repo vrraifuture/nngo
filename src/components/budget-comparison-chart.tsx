@@ -62,9 +62,9 @@ import {
 } from "@/components/ui/table";
 import { createBudgetAction } from "@/app/actions";
 import {
-  canManageBudgets,
-  canEditBudgets,
-  canDeleteBudgets,
+  canManageBudgetsSync,
+  canEditBudgetsSync,
+  canDeleteBudgetsSync,
 } from "@/utils/permissions";
 
 interface Project {
@@ -958,7 +958,7 @@ export default function BudgetComparisonChart({
                 Export Data
               </Button>
 
-              {canManageBudgets() && (
+              {canManageBudgetsSync() && (
                 <>
                   <Dialog
                     open={showImportDialog}
@@ -1428,7 +1428,7 @@ export default function BudgetComparisonChart({
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {canEditBudgets() && (
+                      {canEditBudgetsSync() && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1438,7 +1438,7 @@ export default function BudgetComparisonChart({
                           <Edit className="h-3 w-3" />
                         </Button>
                       )}
-                      {canDeleteBudgets() && (
+                      {canDeleteBudgetsSync() && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1448,7 +1448,7 @@ export default function BudgetComparisonChart({
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       )}
-                      {!canEditBudgets() && !canDeleteBudgets() && (
+                      {!canEditBudgetsSync() && !canDeleteBudgetsSync() && (
                         <span className="text-sm text-gray-500">View Only</span>
                       )}
                     </div>

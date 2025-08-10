@@ -66,15 +66,9 @@ const AVAILABLE_ROLES = [
   { value: "admin", label: "Administrator", color: "bg-red-100 text-red-800" },
   {
     value: "accountant",
-    label: "Accountant",
+    label: "Accountant (Read-Only)",
     color: "bg-blue-100 text-blue-800",
   },
-  {
-    value: "project_manager",
-    label: "Project Manager",
-    color: "bg-green-100 text-green-800",
-  },
-  { value: "donor", label: "Donor", color: "bg-purple-100 text-purple-800" },
 ];
 
 const PERMISSION_CATEGORIES = {
@@ -218,8 +212,10 @@ export default function PermissionManager({
   };
 
   const handleRoleChange = async (newRole: string) => {
-    if (!canManageSettingsSync()) {
-      alert("You don't have permission to change roles.");
+    if (currentRole !== "admin") {
+      alert(
+        "You don't have permission to change roles. Only administrators can manage roles.",
+      );
       return;
     }
 
@@ -255,8 +251,10 @@ export default function PermissionManager({
   };
 
   const handleResetPermissions = async () => {
-    if (!canManageSettingsSync()) {
-      alert("You don't have permission to reset permissions.");
+    if (currentRole !== "admin") {
+      alert(
+        "You don't have permission to reset permissions. Only administrators can reset permissions.",
+      );
       return;
     }
 
@@ -335,8 +333,10 @@ export default function PermissionManager({
     permissionId: string,
     currentlyGranted: boolean,
   ) => {
-    if (!canManageSettingsSync()) {
-      alert("You don't have permission to modify permissions.");
+    if (currentRole !== "admin") {
+      alert(
+        "You don't have permission to modify permissions. Only administrators can modify permissions.",
+      );
       return;
     }
 
@@ -444,7 +444,8 @@ export default function PermissionManager({
     return result;
   };
 
-  if (!canManageSettingsSync() && currentRole !== "admin") {
+  // Only admin should access permission manager
+  if (currentRole !== "admin") {
     return (
       <Card>
         <CardHeader>
@@ -458,8 +459,11 @@ export default function PermissionManager({
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              You don't have permission to manage system settings. Contact an
-              administrator for access.
+              You don't have permission to manage system settings. Only
+              administrators can access the permission manager.
+              <br />
+              <br />
+              Current role: <strong>{currentRole}</strong>
             </AlertDescription>
           </Alert>
         </CardContent>

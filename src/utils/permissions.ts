@@ -60,19 +60,55 @@ export const getUserRole = async (): Promise<string> => {
     }
 
     const supabase = createClient();
-    const { data: userRole, error } = await supabase
+
+    // First, get all roles for this user to handle duplicates
+    const { data: userRoles, error } = await supabase
       .from("user_roles")
-      .select("role")
+      .select("id, role, created_at")
       .eq("user_id", userId)
       .eq("organization_id", orgId)
-      .single();
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error getting user role:", error);
       return "admin"; // Fallback to admin
     }
 
-    return userRole?.role || "admin";
+    if (!userRoles || userRoles.length === 0) {
+      console.warn("No role found for user, defaulting to admin");
+      return "admin";
+    }
+
+    // If there are multiple roles (duplicates), clean them up
+    if (userRoles.length > 1) {
+      console.warn(
+        `Found ${userRoles.length} duplicate roles for user, cleaning up...`,
+      );
+
+      // Keep the most recent role
+      const mostRecentRole = userRoles[0];
+      const duplicateIds = userRoles.slice(1).map((role) => role.id);
+
+      // Delete duplicate entries
+      if (duplicateIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("user_roles")
+          .delete()
+          .in("id", duplicateIds);
+
+        if (deleteError) {
+          console.error("Error cleaning up duplicate roles:", deleteError);
+        } else {
+          console.log(
+            `Cleaned up ${duplicateIds.length} duplicate role entries`,
+          );
+        }
+      }
+
+      return mostRecentRole.role || "admin";
+    }
+
+    return userRoles[0].role || "admin";
   } catch (error) {
     console.error("Error getting user role:", error);
     return "admin";
@@ -115,16 +151,36 @@ export const setUserRole = async (role: string): Promise<void> => {
     }
 
     const supabase = createClient();
-    const { error } = await supabase.from("user_roles").upsert(
-      {
-        user_id: userId,
-        organization_id: orgId,
-        role: role,
-      },
-      {
-        onConflict: "user_id,organization_id",
-      },
-    );
+
+    // First, get all existing roles to clean up duplicates
+    const { data: existingRoles } = await supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("organization_id", orgId);
+
+    // Delete any existing roles for this user/org to prevent duplicates
+    if (existingRoles && existingRoles.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("organization_id", orgId);
+
+      if (deleteError) {
+        console.error("Error deleting existing roles:", deleteError);
+        return;
+      }
+
+      console.log(`Cleaned up ${existingRoles.length} existing role entries`);
+    }
+
+    // Then insert the new role
+    const { error } = await supabase.from("user_roles").insert({
+      user_id: userId,
+      organization_id: orgId,
+      role: role,
+    });
 
     if (error) {
       console.error("Error setting user role:", error);
@@ -578,7 +634,7 @@ export const initializeDefaultPermissions = async (
       return;
     }
 
-    // Define role permissions with restricted defaults
+    // Define role permissions - SIMPLIFIED to only admin and accountant
     const rolePermissions = [
       // Admin gets all permissions
       ...allPermissions.map((p) => ({
@@ -588,72 +644,62 @@ export const initializeDefaultPermissions = async (
         granted: true,
       })),
 
-      // Accountant permissions - RESTRICTED by default (admin must enable)
+      // Accountant permissions - CAN ADD but CANNOT EDIT/DELETE
       ...[
         "view_finances",
         "view_ledger",
         "view_projects",
         "view_donors",
         "view_reports",
-        "generate_reports",
+        "view_users",
+        "manage_expenses", // Allow adding expenses
+        "manage_budgets", // Allow adding budgets
+        "manage_ledger", // Allow adding ledger entries
+        "generate_reports", // Allow generating reports
       ].map((permissionId) => ({
         organization_id: orgId,
         role: "accountant",
         permission_id: permissionId,
-        granted: true, // Only basic view permissions
+        granted: true, // View permissions + add permissions
       })),
-      // Restricted permissions for accountant (must be enabled by admin)
+      // ALL edit/delete/settings permissions are DENIED for accountant
       ...[
-        "manage_expenses",
-        "edit_expenses",
-        "delete_expenses",
-        "manage_budgets",
-        "edit_budgets",
-        "delete_budgets",
-        "manage_ledger",
-        "edit_ledger",
-        "delete_ledger",
-        "edit_reports",
-        "delete_reports",
-      ].map((permissionId) => ({
-        organization_id: orgId,
-        role: "accountant",
-        permission_id: permissionId,
-        granted: false, // Disabled by default - admin must enable
-      })),
-
-      // Project Manager permissions - RESTRICTED by default
-      ...[
-        "view_finances",
-        "view_projects",
-        "view_donors",
-        "view_reports",
-        "generate_reports",
-      ].map((permissionId) => ({
-        organization_id: orgId,
-        role: "project_manager",
-        permission_id: permissionId,
-        granted: true, // Only basic view permissions
-      })),
-      // Restricted permissions for project manager
-      ...[
+        "edit_expenses", // DENIED - cannot edit expenses
+        "delete_expenses", // DENIED - cannot delete expenses
+        "edit_budgets", // DENIED - cannot edit budgets
+        "delete_budgets", // DENIED - cannot delete budgets
+        "edit_ledger", // DENIED - cannot edit ledger entries
+        "delete_ledger", // DENIED - cannot delete ledger entries
         "manage_projects",
         "edit_projects",
         "delete_projects",
+        "manage_donors",
+        "edit_donors",
+        "delete_donors",
         "edit_reports",
+        "delete_reports",
+        "manage_users",
+        "edit_users",
+        "delete_users",
+        "manage_settings", // DENIED - cannot access settings
+        "edit_settings",
+        "view_settings", // DENIED - cannot view settings
+        "manage_currencies",
+        "edit_currencies",
+        "delete_currencies",
+        "manage_categories",
+        "edit_categories",
+        "delete_categories",
+        "manage_accounts",
+        "edit_accounts",
+        "delete_accounts",
+        "manage_permissions",
+        "assign_roles",
       ].map((permissionId) => ({
         organization_id: orgId,
-        role: "project_manager",
+        role: "accountant",
         permission_id: permissionId,
-        granted: false, // Disabled by default - admin must enable
-      })),
-
-      // Donor permissions (very limited - view only)
-      ...["view_reports", "view_projects"].map((permissionId) => ({
-        organization_id: orgId,
-        role: "donor",
-        permission_id: permissionId,
-        granted: true,
+        granted: false, // ALL edit/delete/settings permissions DENIED
       })),
     ];
 
@@ -872,6 +918,26 @@ export const syncPermissionsToSessionCache = async (): Promise<void> => {
     );
   } catch (error) {
     console.error("Error syncing permissions to session cache:", error);
+  }
+};
+
+// Function to sync permissions to localStorage (referenced in refreshPermissions)
+const syncPermissionsToLocalStorage = async (): Promise<void> => {
+  if (typeof window === "undefined") return;
+
+  try {
+    const permissions = await getRolePermissions();
+    const userRole = await getUserRole();
+
+    // Store in localStorage for persistence
+    localStorage.setItem("ngo_role_permissions", JSON.stringify(permissions));
+    localStorage.setItem("ngo_current_user_role", userRole);
+
+    console.log(
+      `Permissions synced to localStorage: ${permissions.length} permissions for role ${userRole}`,
+    );
+  } catch (error) {
+    console.error("Error syncing permissions to localStorage:", error);
   }
 };
 
