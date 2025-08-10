@@ -111,8 +111,9 @@ export default function PermissionInitializer({
 
   // Listen for permission changes and re-verify
   useEffect(() => {
-    const handlePermissionChange = async (event: CustomEvent) => {
-      console.log("Permission change detected in initializer:", event.detail);
+    const handlePermissionChange = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log("Permission change detected in initializer:", customEvent.detail);
 
       try {
         // Refresh permissions from database
@@ -133,8 +134,9 @@ export default function PermissionInitializer({
       }
     };
 
-    const handleRoleChange = async (event: CustomEvent) => {
-      console.log("Role change detected in initializer:", event.detail);
+    const handleRoleChange = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log("Role change detected in initializer:", customEvent.detail);
 
       try {
         // Sync permissions after role change
@@ -144,21 +146,12 @@ export default function PermissionInitializer({
       }
     };
 
-    window.addEventListener(
-      "permissionsChanged",
-      handlePermissionChange as EventListener,
-    );
-    window.addEventListener("roleChanged", handleRoleChange as EventListener);
+    window.addEventListener("permissionsChanged", handlePermissionChange);
+    window.addEventListener("roleChanged", handleRoleChange);
 
     return () => {
-      window.removeEventListener(
-        "permissionsChanged",
-        handlePermissionChange as EventListener,
-      );
-      window.removeEventListener(
-        "roleChanged",
-        handleRoleChange as EventListener,
-      );
+      window.removeEventListener("permissionsChanged", handlePermissionChange);
+      window.removeEventListener("roleChanged", handleRoleChange);
     };
   }, [userRole]);
 
