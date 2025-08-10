@@ -644,7 +644,7 @@ export const initializeDefaultPermissions = async (
         granted: true,
       })),
 
-      // Accountant permissions - LIMITED access with specific restrictions
+      // Accountant permissions - CAN ADD but CANNOT EDIT/DELETE
       ...[
         "view_finances",
         "view_ledger",
@@ -652,23 +652,22 @@ export const initializeDefaultPermissions = async (
         "view_donors",
         "view_reports",
         "view_users",
-        "view_settings",
-        "manage_expenses", // Allow adding expenses only
+        "manage_expenses", // Allow adding expenses
+        "manage_budgets", // Allow adding budgets
+        "manage_ledger", // Allow adding ledger entries
         "generate_reports", // Allow generating reports
       ].map((permissionId) => ({
         organization_id: orgId,
         role: "accountant",
         permission_id: permissionId,
-        granted: true, // View permissions + limited manage permissions
+        granted: true, // View permissions + add permissions
       })),
-      // ALL edit/delete/manage permissions are DENIED for accountant (except expenses add)
+      // ALL edit/delete/settings permissions are DENIED for accountant
       ...[
         "edit_expenses", // DENIED - cannot edit expenses
         "delete_expenses", // DENIED - cannot delete expenses
-        "manage_budgets", // DENIED - cannot manage budgets
         "edit_budgets", // DENIED - cannot edit budgets
         "delete_budgets", // DENIED - cannot delete budgets
-        "manage_ledger", // DENIED - cannot manage ledger
         "edit_ledger", // DENIED - cannot edit ledger entries
         "delete_ledger", // DENIED - cannot delete ledger entries
         "manage_projects",
@@ -682,8 +681,9 @@ export const initializeDefaultPermissions = async (
         "manage_users",
         "edit_users",
         "delete_users",
-        "manage_settings",
+        "manage_settings", // DENIED - cannot access settings
         "edit_settings",
+        "view_settings", // DENIED - cannot view settings
         "manage_currencies",
         "edit_currencies",
         "delete_currencies",
@@ -699,7 +699,7 @@ export const initializeDefaultPermissions = async (
         organization_id: orgId,
         role: "accountant",
         permission_id: permissionId,
-        granted: false, // ALL management/edit/delete permissions DENIED
+        granted: false, // ALL edit/delete/settings permissions DENIED
       })),
     ];
 

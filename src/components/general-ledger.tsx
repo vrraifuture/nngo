@@ -49,6 +49,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { createClient } from "../../supabase/client";
+import {
+  canManageLedgerSync,
+  canEditLedgerSync,
+  canDeleteLedgerSync,
+  canManageSettingsSync,
+} from "@/utils/permissions";
 
 interface LedgerEntry {
   id: string;
@@ -465,8 +471,8 @@ export default function GeneralLedger({
   };
 
   const handleAddAccount = () => {
-    // Check permissions before allowing account creation - only admin can add accounts
-    if (userRole !== "admin") {
+    // Check permissions using the permission system - only admin can add accounts
+    if (!canManageSettingsSync()) {
       alert(
         "You don't have permission to add new accounts. Only administrators can modify the chart of accounts.",
       );
@@ -585,11 +591,9 @@ export default function GeneralLedger({
 
   // Submit batch entries
   const handleSubmitBatch = () => {
-    // Check permissions - only admin can add batch entries
-    if (userRole !== "admin") {
-      alert(
-        "You don't have permission to add ledger entries. Only administrators can modify the general ledger.",
-      );
+    // Check permissions using the permission system
+    if (!canManageLedgerSync()) {
+      alert("You don't have permission to add ledger entries.");
       return;
     }
 
@@ -666,11 +670,9 @@ export default function GeneralLedger({
   };
 
   const handleAddEntry = () => {
-    // Check permissions before allowing entry creation - only admin can add ledger entries
-    if (userRole !== "admin") {
-      alert(
-        "You don't have permission to add ledger entries. Only administrators can modify the general ledger.",
-      );
+    // Check permissions using the permission system
+    if (!canManageLedgerSync()) {
+      alert("You don't have permission to add ledger entries.");
       return;
     }
 
@@ -725,11 +727,9 @@ export default function GeneralLedger({
   };
 
   const handleEditEntry = (entry: LedgerEntry) => {
-    // Check permissions before allowing entry editing - only admin can edit
-    if (userRole !== "admin") {
-      alert(
-        "You don't have permission to edit ledger entries. Only administrators can modify the general ledger.",
-      );
+    // Check permissions using the permission system
+    if (!canEditLedgerSync()) {
+      alert("You don't have permission to edit ledger entries.");
       return;
     }
     setEditingEntry(entry);
@@ -737,11 +737,9 @@ export default function GeneralLedger({
   };
 
   const handleUpdateEntry = () => {
-    // Check permissions before allowing entry updates - only admin can update
-    if (userRole !== "admin") {
-      alert(
-        "You don't have permission to edit ledger entries. Only administrators can modify the general ledger.",
-      );
+    // Check permissions using the permission system
+    if (!canEditLedgerSync()) {
+      alert("You don't have permission to edit ledger entries.");
       return;
     }
 
@@ -757,11 +755,9 @@ export default function GeneralLedger({
   };
 
   const handleDeleteEntry = (entryId: string) => {
-    // Check permissions before allowing entry deletion - only admin can delete
-    if (userRole !== "admin") {
-      alert(
-        "You don't have permission to delete ledger entries. Only administrators can modify the general ledger.",
-      );
+    // Check permissions using the permission system
+    if (!canDeleteLedgerSync()) {
+      alert("You don't have permission to delete ledger entries.");
       return;
     }
 
@@ -1030,11 +1026,9 @@ export default function GeneralLedger({
   };
 
   const handleImportCSV = async () => {
-    // Check permissions - only admin can import entries
-    if (userRole !== "admin") {
-      alert(
-        "You don't have permission to import ledger entries. Only administrators can modify the general ledger.",
-      );
+    // Check permissions using the permission system
+    if (!canManageLedgerSync()) {
+      alert("You don't have permission to import ledger entries.");
       return;
     }
 
@@ -1296,7 +1290,7 @@ export default function GeneralLedger({
                 Export CSV
               </Button>
 
-              {userRole === "admin" && (
+              {canManageLedgerSync() && (
                 <>
                   <Dialog
                     open={showImportDialog}
@@ -2327,7 +2321,9 @@ export default function GeneralLedger({
                 <TableHead>Reference</TableHead>
                 <TableHead className="text-right">Debit</TableHead>
                 <TableHead className="text-right">Credit</TableHead>
-                {userRole === "admin" && <TableHead>Actions</TableHead>}
+                {(canEditLedgerSync() || canDeleteLedgerSync()) && (
+                  <TableHead>Actions</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2356,31 +2352,35 @@ export default function GeneralLedger({
                       ? `${getDefaultCurrency()}${entry.credit.toLocaleString()}`
                       : "-"}
                   </TableCell>
-                  {userRole === "admin" && (
+                  {(canEditLedgerSync() || canDeleteLedgerSync()) && (
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-blue-600 hover:text-blue-700"
-                          onClick={() => handleEditEntry(entry)}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => handleDeleteEntry(entry.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        {canEditLedgerSync() && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-blue-600 hover:text-blue-700"
+                            onClick={() => handleEditEntry(entry)}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {canDeleteLedgerSync() && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => handleDeleteEntry(entry.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {!canEditLedgerSync() && !canDeleteLedgerSync() && (
+                          <span className="text-sm text-gray-500">
+                            View Only
+                          </span>
+                        )}
                       </div>
-                    </TableCell>
-                  )}
-                  {userRole !== "admin" && (
-                    <TableCell>
-                      <span className="text-sm text-gray-500">View Only</span>
                     </TableCell>
                   )}
                 </TableRow>
