@@ -459,8 +459,9 @@ function SettingsPageContent() {
   };
 
   // Permission checking functions - now using the centralized permission system
+  // SIMPLIFIED permission checks - ONLY admin can manage anything
   const canManageCurrencies = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_currencies");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManageCurrencies: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -468,7 +469,7 @@ function SettingsPageContent() {
   };
 
   const canManageProjects = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_projects");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManageProjects: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -476,7 +477,7 @@ function SettingsPageContent() {
   };
 
   const canManageDonors = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_donors");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManageDonors: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -484,7 +485,7 @@ function SettingsPageContent() {
   };
 
   const canManageBudgetCategories = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_categories");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManageBudgetCategories: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -492,7 +493,7 @@ function SettingsPageContent() {
   };
 
   const canManageChartOfAccounts = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_accounts");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManageChartOfAccounts: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -500,7 +501,7 @@ function SettingsPageContent() {
   };
 
   const canManagePaymentMethods = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_settings");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManagePaymentMethods: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -508,7 +509,7 @@ function SettingsPageContent() {
   };
 
   const canManageRoles = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_permissions");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManageRoles: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -516,7 +517,7 @@ function SettingsPageContent() {
   };
 
   const canManageUsers = () => {
-    const canManage = isAdmin || hasPermissionSync("manage_users");
+    const canManage = isAdmin; // ONLY admin can manage
     console.log(
       `canManageUsers: ${canManage} (role: ${userRole}, isAdmin: ${isAdmin})`,
     );
@@ -635,9 +636,14 @@ function SettingsPageContent() {
     </Card>
   );
 
-  // Check if user has access to settings at all
+  // Check if user has access to settings at all - RESTRICTED for accountants
   const hasSettingsAccess = () => {
-    return isAdmin || hasManageSettings || hasPermissionSync("view_settings");
+    // Only admin has full access to settings
+    // Accountants can view some settings but cannot edit anything
+    return (
+      isAdmin ||
+      (userRole === "accountant" && hasPermissionSync("view_settings"))
+    );
   };
 
   // Get default currency from localStorage or system default
@@ -2239,27 +2245,17 @@ function SettingsPageContent() {
       invitation.role.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // Get available roles
+  // Get available roles - SIMPLIFIED to only admin and accountant
   const availableRoles = [
     {
       value: "admin",
       label: "Administrator",
-      description: "Full system access",
+      description: "Full system access - can edit and delete everything",
     },
     {
       value: "accountant",
-      label: "Accountant",
-      description: "Financial management access",
-    },
-    {
-      value: "project_manager",
-      label: "Project Manager",
-      description: "Project and team management",
-    },
-    {
-      value: "donor",
-      label: "Donor",
-      description: "View donation reports and impact",
+      label: "Accountant (Read-Only)",
+      description: "View-only access - cannot edit or delete anything",
     },
   ];
 
@@ -2578,59 +2574,23 @@ function SettingsPageContent() {
     }
   };
 
-  // Get default permissions for a role
+  // Get default permissions for a role - SIMPLIFIED
   const getRoleDefaultPermissions = (role: string): string[] => {
     switch (role) {
       case "admin":
         return availablePermissions.map((p) => p.id); // All permissions
       case "accountant":
         return [
+          // ONLY view permissions for accountant - NO edit/delete/manage permissions
           "view_finances",
-          "manage_expenses",
-          "edit_expenses",
-          "delete_expenses",
-          "manage_budgets",
-          "edit_budgets",
-          "delete_budgets",
-          "manage_currencies",
-          "edit_currencies",
-          "delete_currencies",
           "view_ledger",
-          "manage_ledger",
-          "edit_ledger",
-          "delete_ledger",
           "view_projects",
           "view_donors",
           "view_donations",
           "view_reports",
-          "generate_reports",
-          "edit_reports",
-          "delete_reports",
-          "manage_categories",
-          "edit_categories",
-          "delete_categories",
-          "manage_accounts",
-          "edit_accounts",
-          "delete_accounts",
-          "view_settings",
+          "view_users",
+          "view_settings", // Can view some settings but cannot edit
         ];
-      case "project_manager":
-        return [
-          "view_finances",
-          "view_projects",
-          "manage_projects",
-          "edit_projects",
-          "delete_projects",
-          "assign_project_budgets",
-          "view_donors",
-          "view_donations",
-          "view_reports",
-          "generate_reports",
-          "edit_reports",
-          "view_settings",
-        ];
-      case "donor":
-        return ["view_donations", "view_reports", "view_projects"];
       default:
         return [];
     }
@@ -2737,7 +2697,7 @@ function SettingsPageContent() {
           <div className="container mx-auto px-4 py-8">
             <RestrictedAccessCard
               title="Settings Access Denied"
-              description="You don't have permission to access the settings page. Contact your administrator to request access."
+              description="You don't have permission to access the settings page. Only administrators can access and modify settings. Accountants have read-only access to view certain information but cannot edit anything."
             />
           </div>
         </main>

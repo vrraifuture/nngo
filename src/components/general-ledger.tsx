@@ -465,9 +465,11 @@ export default function GeneralLedger({
   };
 
   const handleAddAccount = () => {
-    // Check permissions before allowing account creation
-    if (userRole !== "admin" && userRole !== "accountant") {
-      alert("You don't have permission to add new accounts.");
+    // Check permissions before allowing account creation - only admin can add accounts
+    if (userRole !== "admin") {
+      alert(
+        "You don't have permission to add new accounts. Only administrators can modify the chart of accounts.",
+      );
       return;
     }
 
@@ -583,9 +585,11 @@ export default function GeneralLedger({
 
   // Submit batch entries
   const handleSubmitBatch = () => {
-    // Check permissions
-    if (userRole !== "admin" && userRole !== "accountant") {
-      alert("You don't have permission to add ledger entries.");
+    // Check permissions - only admin can add batch entries
+    if (userRole !== "admin") {
+      alert(
+        "You don't have permission to add ledger entries. Only administrators can modify the general ledger.",
+      );
       return;
     }
 
@@ -662,9 +666,11 @@ export default function GeneralLedger({
   };
 
   const handleAddEntry = () => {
-    // Check permissions before allowing entry creation
-    if (userRole !== "admin" && userRole !== "accountant") {
-      alert("You don't have permission to add ledger entries.");
+    // Check permissions before allowing entry creation - only admin can add ledger entries
+    if (userRole !== "admin") {
+      alert(
+        "You don't have permission to add ledger entries. Only administrators can modify the general ledger.",
+      );
       return;
     }
 
@@ -719,14 +725,23 @@ export default function GeneralLedger({
   };
 
   const handleEditEntry = (entry: LedgerEntry) => {
+    // Check permissions before allowing entry editing - only admin can edit
+    if (userRole !== "admin") {
+      alert(
+        "You don't have permission to edit ledger entries. Only administrators can modify the general ledger.",
+      );
+      return;
+    }
     setEditingEntry(entry);
     setShowEditDialog(true);
   };
 
   const handleUpdateEntry = () => {
-    // Check permissions before allowing entry updates
-    if (userRole !== "admin" && userRole !== "accountant") {
-      alert("You don't have permission to edit ledger entries.");
+    // Check permissions before allowing entry updates - only admin can update
+    if (userRole !== "admin") {
+      alert(
+        "You don't have permission to edit ledger entries. Only administrators can modify the general ledger.",
+      );
       return;
     }
 
@@ -742,9 +757,11 @@ export default function GeneralLedger({
   };
 
   const handleDeleteEntry = (entryId: string) => {
-    // Check permissions before allowing entry deletion
-    if (userRole !== "admin" && userRole !== "accountant") {
-      alert("You don't have permission to delete ledger entries.");
+    // Check permissions before allowing entry deletion - only admin can delete
+    if (userRole !== "admin") {
+      alert(
+        "You don't have permission to delete ledger entries. Only administrators can modify the general ledger.",
+      );
       return;
     }
 
@@ -1013,9 +1030,11 @@ export default function GeneralLedger({
   };
 
   const handleImportCSV = async () => {
-    // Check permissions
-    if (userRole !== "admin" && userRole !== "accountant") {
-      alert("You don't have permission to import ledger entries.");
+    // Check permissions - only admin can import entries
+    if (userRole !== "admin") {
+      alert(
+        "You don't have permission to import ledger entries. Only administrators can modify the general ledger.",
+      );
       return;
     }
 
@@ -1277,7 +1296,7 @@ export default function GeneralLedger({
                 Export CSV
               </Button>
 
-              {(userRole === "admin" || userRole === "accountant") && (
+              {userRole === "admin" && (
                 <>
                   <Dialog
                     open={showImportDialog}
@@ -2308,9 +2327,7 @@ export default function GeneralLedger({
                 <TableHead>Reference</TableHead>
                 <TableHead className="text-right">Debit</TableHead>
                 <TableHead className="text-right">Credit</TableHead>
-                {(userRole === "admin" || userRole === "accountant") && (
-                  <TableHead>Actions</TableHead>
-                )}
+                {userRole === "admin" && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2339,7 +2356,7 @@ export default function GeneralLedger({
                       ? `${getDefaultCurrency()}${entry.credit.toLocaleString()}`
                       : "-"}
                   </TableCell>
-                  {(userRole === "admin" || userRole === "accountant") && (
+                  {userRole === "admin" && (
                     <TableCell>
                       <div className="flex gap-1">
                         <Button
@@ -2359,6 +2376,11 @@ export default function GeneralLedger({
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
+                    </TableCell>
+                  )}
+                  {userRole !== "admin" && (
+                    <TableCell>
+                      <span className="text-sm text-gray-500">View Only</span>
                     </TableCell>
                   )}
                 </TableRow>
