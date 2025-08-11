@@ -43,7 +43,17 @@ export default async function Dashboard() {
     return redirect("/sign-in");
   }
 
-  // Get user role from database with duplicate handling
+  // Define super admin users - these users should always have admin access
+  const SUPER_ADMIN_EMAILS = [
+    "abdousentore@gmail.com",
+    // Add more super admin emails here as needed
+  ];
+
+  // Check if user is a super admin
+  const isSuperAdmin =
+    user.email && SUPER_ADMIN_EMAILS.includes(user.email.toLowerCase());
+
+  // Get user role from database with super admin handling
   let role = "viewer"; // Default fallback
 
   try {
@@ -55,74 +65,113 @@ export default async function Dashboard() {
       .single();
 
     if (org) {
-      // Get all roles for this user to handle duplicates
-      const { data: userRoles, error: roleError } = await supabase
-        .from("user_roles")
-        .select("id, role, created_at")
-        .eq("user_id", user.id)
-        .eq("organization_id", org.id)
-        .order("created_at", { ascending: false });
+      // If user is super admin, ensure they have admin role
+      if (isSuperAdmin) {
+        console.log(
+          `Super admin detected: ${user.email} - ensuring admin role`,
+        );
 
-      if (!roleError && userRoles && userRoles.length > 0) {
-        // If there are multiple roles (duplicates), clean them up
-        if (userRoles.length > 1) {
-          console.warn(
-            `Found ${userRoles.length} duplicate roles for user, cleaning up...`,
-          );
+        // Delete any existing roles for this user
+        await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("organization_id", org.id);
 
-          // Keep the most recent role
-          const mostRecentRole = userRoles[0];
-          const duplicateIds = userRoles.slice(1).map((r) => r.id);
-
-          // Delete duplicate entries
-          if (duplicateIds.length > 0) {
-            const { error: deleteError } = await supabase
-              .from("user_roles")
-              .delete()
-              .in("id", duplicateIds);
-
-            if (deleteError) {
-              console.error("Error cleaning up duplicate roles:", deleteError);
-            } else {
-              console.log(
-                `Cleaned up ${duplicateIds.length} duplicate role entries`,
-              );
-            }
-          }
-
-          role = mostRecentRole.role || "viewer";
-        } else {
-          role = userRoles[0].role || "viewer";
-        }
-
-        console.log("Found existing role for user:", role);
-      } else {
-        // No role found, create a default viewer role
-        console.log("No role found for user, creating viewer role");
-
-        const { error: createRoleError } = await supabase
+        // Insert admin role
+        const { error: createAdminError } = await supabase
           .from("user_roles")
           .insert({
             user_id: user.id,
             organization_id: org.id,
-            role: "viewer",
+            role: "admin",
           });
 
-        if (!createRoleError) {
-          role = "viewer";
-          console.log("Created viewer role for new user");
+        if (!createAdminError) {
+          role = "admin";
+          console.log(`Super admin role ensured for ${user.email}`);
         } else {
-          console.error("Failed to create role for user:", createRoleError);
-          role = "viewer"; // Fallback
+          console.error(
+            "Failed to create admin role for super admin:",
+            createAdminError,
+          );
+          role = "admin"; // Still treat as admin even if DB insert fails
+        }
+      } else {
+        // For non-super admin users, get their role from database
+        const { data: userRoles, error: roleError } = await supabase
+          .from("user_roles")
+          .select("id, role, created_at")
+          .eq("user_id", user.id)
+          .eq("organization_id", org.id)
+          .order("created_at", { ascending: false });
+
+        if (!roleError && userRoles && userRoles.length > 0) {
+          // If there are multiple roles (duplicates), clean them up
+          if (userRoles.length > 1) {
+            console.warn(
+              `Found ${userRoles.length} duplicate roles for user, cleaning up...`,
+            );
+
+            // Keep the most recent role
+            const mostRecentRole = userRoles[0];
+            const duplicateIds = userRoles.slice(1).map((r) => r.id);
+
+            // Delete duplicate entries
+            if (duplicateIds.length > 0) {
+              const { error: deleteError } = await supabase
+                .from("user_roles")
+                .delete()
+                .in("id", duplicateIds);
+
+              if (deleteError) {
+                console.error(
+                  "Error cleaning up duplicate roles:",
+                  deleteError,
+                );
+              } else {
+                console.log(
+                  `Cleaned up ${duplicateIds.length} duplicate role entries`,
+                );
+              }
+            }
+
+            role = mostRecentRole.role || "viewer";
+          } else {
+            role = userRoles[0].role || "viewer";
+          }
+
+          console.log(`Found existing role for user ${user.email}:`, role);
+        } else {
+          // No role found, create a default viewer role
+          console.log(
+            `No role found for user ${user.email}, creating viewer role`,
+          );
+
+          const { error: createRoleError } = await supabase
+            .from("user_roles")
+            .insert({
+              user_id: user.id,
+              organization_id: org.id,
+              role: "viewer",
+            });
+
+          if (!createRoleError) {
+            role = "viewer";
+            console.log("Created viewer role for new user");
+          } else {
+            console.error("Failed to create role for user:", createRoleError);
+            role = "viewer"; // Fallback
+          }
         }
       }
     } else {
-      console.warn("No organization found, using viewer role");
-      role = "viewer"; // Fallback if no organization
+      console.warn("No organization found, using fallback role");
+      role = isSuperAdmin ? "admin" : "viewer"; // Super admins get admin even without org
     }
   } catch (error) {
     console.error("Error handling user role:", error);
-    role = "viewer"; // Safe fallback
+    role = isSuperAdmin ? "admin" : "viewer"; // Safe fallback with super admin check
   }
 
   console.log(`Dashboard loaded for user ${user.email} with role: ${role}`);
