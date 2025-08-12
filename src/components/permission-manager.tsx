@@ -62,6 +62,16 @@ interface PermissionManagerProps {
   userRole: string;
 }
 
+interface PermissionCategory {
+  label: string;
+  permissions: string[];
+}
+
+interface PermissionCategoryWithStats extends PermissionCategory {
+  granted: string[];
+  total: number;
+}
+
 const AVAILABLE_ROLES = [
   { value: "admin", label: "Administrator", color: "bg-red-100 text-red-800" },
   {
@@ -71,7 +81,7 @@ const AVAILABLE_ROLES = [
   },
 ];
 
-const PERMISSION_CATEGORIES = {
+const PERMISSION_CATEGORIES: Record<string, PermissionCategory> = {
   finances: {
     label: "Financial Management",
     permissions: [
@@ -427,9 +437,11 @@ export default function PermissionManager({
     return permissions.filter((p) => p.role === role);
   };
 
-  const getPermissionsByCategory = (role: string) => {
+  const getPermissionsByCategory = (
+    role: string,
+  ): Record<string, PermissionCategoryWithStats> => {
     const rolePerms = getRolePermissions(role);
-    const result: any = {};
+    const result: Record<string, PermissionCategoryWithStats> = {};
 
     Object.entries(PERMISSION_CATEGORIES).forEach(([category, config]) => {
       result[category] = {

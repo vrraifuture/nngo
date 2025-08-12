@@ -40,7 +40,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { createFundSourceAction } from "@/app/actions";
-import { canManageBudgets, canViewFinances } from "@/utils/permissions";
+import { canManageBudgetsSync, canViewFinancesSync } from "@/utils/permissions";
 
 interface FundSource {
   id: string;
@@ -118,7 +118,8 @@ export default function FundTrackingPanel({
 
   const checkPermissions = async () => {
     try {
-      const result = await canManageBudgets();
+      // Use the state-based approach since you're already tracking canManage in state
+      const result = canManageBudgetsSync();
       setCanManage(result);
     } catch (error) {
       console.error("Error checking permissions:", error);
