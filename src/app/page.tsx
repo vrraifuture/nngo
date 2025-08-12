@@ -11,7 +11,7 @@ export default async function Home() {
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      {/* Simple Hero Section */}
+      {/* Simple Hero Snection */}
       <section className="flex items-center justify-center min-h-[80vh]">
         <div className="text-center max-w-4xl mx-auto px-4">
           <h1 className="text-8xl sm:text-9xl font-bold text-blue-600 tracking-tight mb-8">
