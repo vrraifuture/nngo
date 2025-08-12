@@ -71,6 +71,7 @@ export default function FundTrackingPanel({
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddDonorDialog, setShowAddDonorDialog] = useState(false);
   const [showAddProjectDialog, setShowAddProjectDialog] = useState(false);
+  const [canManage, setCanManage] = useState(false);
   const [donors, setDonors] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [newDonor, setNewDonor] = useState({
@@ -108,11 +109,23 @@ export default function FundTrackingPanel({
     fetchFunds();
     fetchDonors();
     fetchProjects();
+    checkPermissions();
   }, []);
 
   useEffect(() => {
     applyFilters();
   }, [funds, filterBy, showRestricted, showUnrestricted]);
+
+  const checkPermissions = async () => {
+    try {
+      // Use the state-based approach since you're already tracking canManage in state
+      const result = canManageBudgetsSync();
+      setCanManage(result);
+    } catch (error) {
+      console.error("Error checking permissions:", error);
+      setCanManage(false);
+    }
+  };
 
   const fetchFunds = async () => {
     try {
@@ -323,7 +336,7 @@ export default function FundTrackingPanel({
                 Unrestricted
               </Button>
 
-              {canManageBudgetsSync() && (
+              {canManage && (
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
                     <Button className="flex items-center gap-2">
