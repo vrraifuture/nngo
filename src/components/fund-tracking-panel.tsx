@@ -40,7 +40,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { createFundSourceAction } from "@/app/actions";
-import { canManageBudgets, canViewFinances } from "@/utils/permissions";
+import { canManageBudgetsSync, canViewFinancesSync } from "@/utils/permissions";
 
 interface FundSource {
   id: string;
@@ -323,7 +323,7 @@ export default function FundTrackingPanel({
                 Unrestricted
               </Button>
 
-              {canManageBudgets() && (
+              {canManageBudgetsSync() && (
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
                     <Button className="flex items-center gap-2">
