@@ -62,7 +62,7 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "../../../../supabase/client";
-import { redirect } from "next/navigation";
+
 import {
   createUserAction,
   updateUserAction,
