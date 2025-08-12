@@ -346,7 +346,7 @@ export default function BudgetComparisonChart({
         budgets.forEach((budget: any) => {
           let categoryName = "Uncategorized";
 
-          // Safely extract category name with proper type checking
+          // Safely extract category nameh6 with proper type checking
           if (budget.budget_categories) {
             if (Array.isArray(budget.budget_categories)) {
               categoryName =
