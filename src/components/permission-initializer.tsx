@@ -9,7 +9,10 @@ import {
   getRolePermissionsSync,
   syncPermissionsToSessionCache,
   refreshPermissions,
+  verifyAndFixAdminRole,
+  debugAdminRole,
 } from "@/utils/permissions";
+import { createClient } from "../../supabase/client";
 
 interface PermissionInitializerProps {
   userRole: string;
@@ -72,14 +75,35 @@ export default function PermissionInitializer({
             initializeDefaultPermissions(true);
           }
 
-          // Set role in session storage and verify admin status
+          // Set role in both session and localStorage for better persistence
           sessionStorage.setItem("temp_user_role", userRole);
+          localStorage.setItem("ngo_current_user_role", userRole);
+
+          // Also store user email for super admin checks (if available)
+          try {
+            const supabase = createClient();
+            supabase.auth
+              .getUser()
+              .then(({ data: { user } }) => {
+                if (user?.email) {
+                  localStorage.setItem("ngo_current_user_email", user.email);
+                }
+              })
+              .catch((error) => {
+                console.error("Error storing user email:", error);
+              });
+          } catch (error) {
+            console.error("Error storing user email:", error);
+          }
+
           if (userRole === "admin") {
             sessionStorage.setItem("admin_verified", "true");
-            console.log("Admin role verified and set in session storage");
+            localStorage.setItem("admin_verified", "true");
+            console.log("Admin role verified and set in storage");
           } else {
             sessionStorage.removeItem("admin_verified");
-            console.log(`Non-admin role (${userRole}) set in session storage`);
+            localStorage.removeItem("admin_verified");
+            console.log(`Non-admin role (${userRole}) set in storage`);
           }
 
           setInitialized(true);
@@ -90,7 +114,18 @@ export default function PermissionInitializer({
         if (process.env.NODE_ENV === "development") {
           setTimeout(async () => {
             await debugPermissions();
+            await debugAdminRole();
           }, 1000);
+        }
+
+        // Additional verification for admin users
+        if (userRole === "admin") {
+          setTimeout(async () => {
+            const verified = await verifyAndFixAdminRole();
+            if (verified) {
+              console.log("Admin role verification completed successfully");
+            }
+          }, 1500);
         }
       } catch (error) {
         console.error("Error initializing permissions:", error);
@@ -99,9 +134,17 @@ export default function PermissionInitializer({
         // Fallback to localStorage-only mode
         try {
           localStorage.setItem("ngo_current_user_role", userRole);
-          console.log("Fallback: Set role in localStorage only");
+          sessionStorage.setItem("temp_user_role", userRole);
+          if (userRole === "admin") {
+            localStorage.setItem("admin_verified", "true");
+            sessionStorage.setItem("admin_verified", "true");
+          }
+          console.log("Fallback: Set role in storage");
+          setInitialized(true);
+          setLoading(false);
         } catch (localError) {
           console.error("Fallback failed:", localError);
+          setLoading(false);
         }
       }
     };

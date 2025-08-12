@@ -30,7 +30,7 @@ export async function middleware(req: NextRequest) {
     },
   );
 
-  // Refresh session ppif expired - required for Server Components
+  // Refresh session ppif expired yy- required for Servuer Components
   const {
     data: { session },
     error,

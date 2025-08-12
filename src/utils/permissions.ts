@@ -6,6 +6,33 @@ let permissionsCache: any[] = [];
 let cacheTimestamp = 0;
 const CACHE_DURATION = 30 * 1000; // 30 seconds for faster updates
 
+// Define super admin users - these users should always have admin access
+const SUPER_ADMIN_EMAILS = [
+  "abdousentore@gmail.com",
+  // Add more super admin emails here as needed
+];
+
+// Check if a user email should have super admin privileges
+export const isSuperAdminEmail = (email: string): boolean => {
+  return SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
+};
+
+// Get current user's email from Supabase auth
+const getCurrentUserEmail = async (): Promise<string | null> => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user?.email || null;
+  } catch (error) {
+    console.error("Error getting current user email:", error);
+    return null;
+  }
+};
+
 // Get current user's ID from Supabase auth
 const getCurrentUserId = async (): Promise<string | null> => {
   if (typeof window === "undefined") return null;
@@ -46,17 +73,30 @@ const getOrganizationId = async (): Promise<string | null> => {
   }
 };
 
-// Get user's role from database
+// Get user's role from database with super admin check
 export const getUserRole = async (): Promise<string> => {
   if (typeof window === "undefined") return "admin"; // Server-side fallback
 
   try {
     const userId = await getCurrentUserId();
+    const userEmail = await getCurrentUserEmail();
     const orgId = await getOrganizationId();
 
-    if (!userId || !orgId) {
-      console.warn("No user or organization found, defaulting to admin");
+    // Check if user is a super admin first
+    if (userEmail && isSuperAdminEmail(userEmail)) {
+      console.log(`Super admin detected: ${userEmail} - ensuring admin role`);
+
+      // Ensure super admin has admin role in database
+      if (userId && orgId) {
+        await ensureSuperAdminRole(userId, orgId);
+      }
+
       return "admin";
+    }
+
+    if (!userId || !orgId) {
+      console.warn("No user or organization found, defaulting to viewer");
+      return "viewer";
     }
 
     const supabase = createClient();
@@ -71,12 +111,12 @@ export const getUserRole = async (): Promise<string> => {
 
     if (error) {
       console.error("Error getting user role:", error);
-      return "admin"; // Fallback to admin
+      return "viewer"; // Fallback to viewer for security
     }
 
     if (!userRoles || userRoles.length === 0) {
-      console.warn("No role found for user, defaulting to admin");
-      return "admin";
+      console.warn("No role found for user, defaulting to viewer");
+      return "viewer";
     }
 
     // If there are multiple roles (duplicates), clean them up
@@ -105,19 +145,77 @@ export const getUserRole = async (): Promise<string> => {
         }
       }
 
-      return mostRecentRole.role || "admin";
+      return mostRecentRole.role || "viewer";
     }
 
-    return userRoles[0].role || "admin";
+    return userRoles[0].role || "viewer";
   } catch (error) {
     console.error("Error getting user role:", error);
-    return "admin";
+    return "viewer";
+  }
+};
+
+// Ensure super admin users have admin role in database
+const ensureSuperAdminRole = async (
+  userId: string,
+  orgId: string,
+): Promise<void> => {
+  try {
+    const supabase = createClient();
+
+    // Check if user already has admin role
+    const { data: existingRole } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("organization_id", orgId)
+      .single();
+
+    if (existingRole?.role === "admin") {
+      console.log("Super admin already has admin role in database");
+      return;
+    }
+
+    // Delete any existing non-admin roles
+    await supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId)
+      .eq("organization_id", orgId);
+
+    // Insert admin role
+    const { error } = await supabase.from("user_roles").insert({
+      user_id: userId,
+      organization_id: orgId,
+      role: "admin",
+    });
+
+    if (error) {
+      console.error("Error ensuring super admin role:", error);
+    } else {
+      console.log("Super admin role ensured in database");
+    }
+  } catch (error) {
+    console.error("Error in ensureSuperAdminRole:", error);
   }
 };
 
 // Synchronous version that uses cache only - no localStorage
 export const getUserRoleSync = (): string => {
-  if (typeof window === "undefined") return "viewer"; // Server-side default
+  if (typeof window === "undefined") return "admin"; // Server-side default to admin
+
+  // Check if current user is a super admin by email (if available in localStorage)
+  try {
+    const userEmail = localStorage.getItem("ngo_current_user_email");
+    if (userEmail && isSuperAdminEmail(userEmail)) {
+      console.log(
+        `Super admin detected in sync: ${userEmail} - returning admin role`,
+      );
+      return "admin";
+    }
+  } catch (error) {
+    console.error("Error checking super admin in sync:", error);
+  }
 
   // Use cached role if available and recent
   const now = Date.now();
@@ -134,7 +232,33 @@ export const getUserRoleSync = (): string => {
     return storedRole;
   }
 
-  return "viewer"; // Default to viewer for security
+  // Check localStorage as fallback
+  try {
+    const localRole = localStorage.getItem("ngo_current_user_role");
+    if (localRole && localRole !== "null" && localRole !== "undefined") {
+      console.log(`Using localStorage role fallback: ${localRole}`);
+      return localRole;
+    }
+  } catch (error) {
+    console.error("Error accessing localStorage:", error);
+  }
+
+  // Check admin verification flag as final fallback
+  try {
+    const adminVerified =
+      sessionStorage.getItem("admin_verified") ||
+      localStorage.getItem("admin_verified");
+    if (adminVerified === "true") {
+      console.log("Admin verification flag found - returning admin role");
+      return "admin";
+    }
+  } catch (error) {
+    console.error("Error checking admin verification:", error);
+  }
+
+  // Default to viewer for security (changed from admin)
+  console.log("No role found, defaulting to viewer for security");
+  return "viewer";
 };
 
 // Set user's role in database - server-side only
@@ -187,9 +311,18 @@ export const setUserRole = async (role: string): Promise<void> => {
       return;
     }
 
-    // Update session cache only (no localStorage)
+    // Update both session and localStorage for better persistence
     const previousRole = getUserRoleSync();
     sessionStorage.setItem("temp_user_role", role);
+    localStorage.setItem("ngo_current_user_role", role);
+
+    // Set admin verification flag if role is admin
+    if (role === "admin") {
+      sessionStorage.setItem("admin_verified", "true");
+      console.log("Admin role verified and cached");
+    } else {
+      sessionStorage.removeItem("admin_verified");
+    }
 
     // Clear permissions cache to force refresh
     permissionsCache = [];
@@ -331,18 +464,29 @@ export const hasPermissionSync = (permissionId: string): boolean => {
     console.log(`Permission check: ${permissionId} for role: ${userRole}`);
     console.log(`Permissions loaded: ${rolePermissions.length}`);
 
-    // If no permissions are loaded, return false for security (except for verified admin)
-    if (rolePermissions.length === 0) {
-      // Only allow admin if explicitly set in session and verified
-      const isVerifiedAdmin =
-        userRole === "admin" &&
-        sessionStorage.getItem("admin_verified") === "true";
-      if (isVerifiedAdmin) {
-        console.log(
-          "Verified admin with no permissions loaded - allowing access",
+    // Special handling for admin users
+    if (userRole === "admin") {
+      // If permissions are loaded, check database permissions first
+      if (rolePermissions.length > 0) {
+        const adminPermission = rolePermissions.find(
+          (p: any) => p.role === "admin" && p.permission_id === permissionId,
         );
-        return true;
+        // Use database value if it exists, otherwise default to true for admin
+        const result = adminPermission ? adminPermission.granted : true;
+        console.log(`Admin permission result from database: ${result}`);
+        return result;
       }
+
+      // If no permissions are loaded yet, allow admin access by default
+      // This prevents admin lockout during permission initialization
+      console.log(
+        "Admin user with no permissions loaded - allowing access (admin fallback)",
+      );
+      return true;
+    }
+
+    // For non-admin users, require permissions to be loaded
+    if (rolePermissions.length === 0) {
       console.warn(
         `No permissions found for role: ${userRole} - denying access`,
       );
@@ -360,7 +504,13 @@ export const hasPermissionSync = (permissionId: string): boolean => {
     return result;
   } catch (error) {
     console.error("Error checking permission sync:", error);
-    // Default to false for security
+    // For admin users, default to true to prevent lockout
+    const userRole = getUserRoleSync();
+    if (userRole === "admin") {
+      console.log("Error occurred but user is admin - allowing access");
+      return true;
+    }
+    // Default to false for security for non-admin users
     return false;
   }
 };
@@ -908,13 +1058,34 @@ export const syncPermissionsToSessionCache = async (): Promise<void> => {
   try {
     const permissions = await getRolePermissions();
     const userRole = await getUserRole();
+    const userEmail = await getCurrentUserEmail();
 
-    // Store in session cache only (no localStorage)
+    // Store in both session and localStorage for better persistence
     sessionStorage.setItem("temp_user_role", userRole);
+    localStorage.setItem("ngo_current_user_role", userRole);
+    localStorage.setItem("ngo_role_permissions", JSON.stringify(permissions));
+
+    // Store user email for super admin checks
+    if (userEmail) {
+      localStorage.setItem("ngo_current_user_email", userEmail);
+    }
+
     cacheTimestamp = Date.now();
 
+    // Set admin verification flag if role is admin or user is super admin
+    if (userRole === "admin" || (userEmail && isSuperAdminEmail(userEmail))) {
+      sessionStorage.setItem("admin_verified", "true");
+      localStorage.setItem("admin_verified", "true");
+      console.log(
+        `Admin verification set for ${userEmail || "unknown user"} with role ${userRole}`,
+      );
+    } else {
+      sessionStorage.removeItem("admin_verified");
+      localStorage.removeItem("admin_verified");
+    }
+
     console.log(
-      `Permissions synced to session cache: ${permissions.length} permissions for role ${userRole}`,
+      `Permissions synced to cache: ${permissions.length} permissions for role ${userRole} (email: ${userEmail})`,
     );
   } catch (error) {
     console.error("Error syncing permissions to session cache:", error);
@@ -1042,6 +1213,15 @@ export const getPermissionStatus = (permissionId: string): any => {
     (p: any) => p.role === userRole && p.permission_id === permissionId,
   );
 
+  // Check if user is super admin
+  let isSuperAdmin = false;
+  try {
+    const userEmail = localStorage.getItem("ngo_current_user_email");
+    isSuperAdmin = userEmail ? isSuperAdminEmail(userEmail) : false;
+  } catch (error) {
+    console.error("Error checking super admin status:", error);
+  }
+
   return {
     userRole,
     permissionId,
@@ -1050,5 +1230,143 @@ export const getPermissionStatus = (permissionId: string): any => {
     hasPermission: hasPermissionSync(permissionId),
     totalPermissions: permissions.length,
     userPermissions: permissions.filter((p: any) => p.role === userRole).length,
+    isSuperAdmin,
+    adminVerified:
+      sessionStorage.getItem("admin_verified") === "true" ||
+      localStorage.getItem("admin_verified") === "true",
   };
+};
+
+// Function to manually verify and fix admin user roles
+export const verifyAndFixAdminRole = async (
+  userEmail?: string,
+): Promise<boolean> => {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const email = userEmail || (await getCurrentUserEmail());
+
+    if (!email) {
+      console.error("No user email available for admin verification");
+      return false;
+    }
+
+    console.log(`Verifying admin role for: ${email}`);
+
+    if (isSuperAdminEmail(email)) {
+      console.log(`${email} is a super admin - ensuring admin role`);
+
+      const userId = await getCurrentUserId();
+      const orgId = await getOrganizationId();
+
+      if (userId && orgId) {
+        await ensureSuperAdminRole(userId, orgId);
+
+        // Update local storage and session
+        sessionStorage.setItem("temp_user_role", "admin");
+        localStorage.setItem("ngo_current_user_role", "admin");
+        localStorage.setItem("ngo_current_user_email", email);
+        sessionStorage.setItem("admin_verified", "true");
+        localStorage.setItem("admin_verified", "true");
+
+        // Clear permissions cache to force refresh
+        permissionsCache = [];
+        cacheTimestamp = 0;
+
+        // Sync permissions
+        await syncPermissionsToSessionCache();
+
+        console.log(`Admin role verified and fixed for ${email}`);
+        return true;
+      }
+    } else {
+      console.log(`${email} is not a super admin`);
+      return false;
+    }
+  } catch (error) {
+    console.error("Error verifying admin role:", error);
+    return false;
+  }
+
+  return false;
+};
+
+// Debug function specifically for admin role issues
+export const debugAdminRole = async (): Promise<void> => {
+  if (typeof window === "undefined") return;
+
+  try {
+    console.log("\n=== ADMIN ROLE DEBUG ===");
+
+    const userEmail = await getCurrentUserEmail();
+    const userId = await getCurrentUserId();
+    const userRole = await getUserRole();
+    const userRoleSync = getUserRoleSync();
+
+    console.log("1. User Information:");
+    console.log(`   - Email: ${userEmail}`);
+    console.log(`   - User ID: ${userId}`);
+    console.log(
+      `   - Is Super Admin: ${userEmail ? isSuperAdminEmail(userEmail) : false}`,
+    );
+
+    console.log("\n2. Role Information:");
+    console.log(`   - Async Role: ${userRole}`);
+    console.log(`   - Sync Role: ${userRoleSync}`);
+    console.log(`   - Role Match: ${userRole === userRoleSync}`);
+
+    console.log("\n3. Storage Status:");
+    console.log(
+      `   - Session Role: ${sessionStorage.getItem("temp_user_role")}`,
+    );
+    console.log(
+      `   - Local Role: ${localStorage.getItem("ngo_current_user_role")}`,
+    );
+    console.log(
+      `   - Local Email: ${localStorage.getItem("ngo_current_user_email")}`,
+    );
+    console.log(
+      `   - Session Admin Verified: ${sessionStorage.getItem("admin_verified")}`,
+    );
+    console.log(
+      `   - Local Admin Verified: ${localStorage.getItem("admin_verified")}`,
+    );
+
+    console.log("\n4. Database Check:");
+    if (userId) {
+      const orgId = await getOrganizationId();
+      if (orgId) {
+        const supabase = createClient();
+        const { data: dbRole, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId)
+          .eq("organization_id", orgId)
+          .single();
+
+        console.log(`   - Database Role: ${dbRole?.role || "Not found"}`);
+        console.log(`   - Database Error: ${error?.message || "None"}`);
+      }
+    }
+
+    console.log("\n5. Recommendations:");
+    if (userEmail && isSuperAdminEmail(userEmail) && userRole !== "admin") {
+      console.log(
+        `   - ⚠️  Super admin ${userEmail} does not have admin role!`,
+      );
+      console.log(`   - 🔧 Run verifyAndFixAdminRole() to fix this`);
+    } else if (
+      userEmail &&
+      isSuperAdminEmail(userEmail) &&
+      userRole === "admin"
+    ) {
+      console.log(`   - ✅ Super admin ${userEmail} has correct admin role`);
+    } else {
+      console.log(`   - ℹ️  User ${userEmail} is not a super admin`);
+    }
+
+    console.log("\n=== END ADMIN DEBUG ===\n");
+  } catch (error) {
+    console.error("Error in debugAdminRole:", error);
+  }
 };
