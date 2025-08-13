@@ -55,6 +55,7 @@ import {
   canDeleteLedgerSync,
   canManageSettingsSync,
 } from "@/utils/permissions";
+import { getCurrencySymbol, formatCurrencyCompact } from "@/utils/currency";
 
 interface LedgerEntry {
   id: string;
@@ -148,20 +149,6 @@ export default function GeneralLedger({
   });
 
   const supabase = createClient();
-
-  // Get default currency
-  const getDefaultCurrency = () => {
-    try {
-      const savedDefaultCurrency = localStorage.getItem("ngo_default_currency");
-      if (savedDefaultCurrency) {
-        const defaultCurrency = JSON.parse(savedDefaultCurrency);
-        return defaultCurrency.symbol || "$";
-      }
-    } catch (error) {
-      console.error("Error getting default currency:", error);
-    }
-    return "$"; // fallback
-  };
 
   // Initialize chart of accounts
   const initializeChartOfAccounts = () => {
@@ -627,7 +614,7 @@ export default function GeneralLedger({
       const totalCredits = getBatchTotalCredits();
       const difference = Math.abs(totalDebits - totalCredits);
 
-      const confirmMessage = `The batch is not balanced!\n\nTotal Debits: ${getDefaultCurrency()}${totalDebits.toLocaleString()}\nTotal Credits: ${getDefaultCurrency()}${totalCredits.toLocaleString()}\nDifference: ${getDefaultCurrency()}${difference.toLocaleString()}\n\nPlease check the "Force Submit" checkbox to proceed with unbalanced entries, or adjust the amounts to balance the entries.`;
+      const confirmMessage = `The batch is not balanced!\n\nTotal Debits: ${formatCurrencyCompact(totalDebits)}\nTotal Credits: ${formatCurrencyCompact(totalCredits)}\nDifference: ${formatCurrencyCompact(difference)}\n\nPlease check the "Force Submit" checkbox to proceed with unbalanced entries, or adjust the amounts to balance the entries.`;
 
       alert(confirmMessage);
       return;
@@ -1175,8 +1162,7 @@ export default function GeneralLedger({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-900">
-              {getDefaultCurrency()}
-              {getTotalDebits().toLocaleString()}
+              {formatCurrencyCompact(getTotalDebits())}
             </div>
             <p className="text-xs text-green-700 mt-1">
               {getFilteredEntries().filter((e) => e.debit > 0).length} debit
@@ -1194,8 +1180,7 @@ export default function GeneralLedger({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-900">
-              {getDefaultCurrency()}
-              {getTotalCredits().toLocaleString()}
+              {formatCurrencyCompact(getTotalCredits())}
             </div>
             <p className="text-xs text-red-700 mt-1">
               {getFilteredEntries().filter((e) => e.credit > 0).length} credit
@@ -1219,8 +1204,9 @@ export default function GeneralLedger({
                   : "text-red-900"
               }`}
             >
-              {getDefaultCurrency()}
-              {Math.abs(getTotalDebits() - getTotalCredits()).toLocaleString()}
+              {formatCurrencyCompact(
+                Math.abs(getTotalDebits() - getTotalCredits()),
+              )}
             </div>
             <p className="text-xs text-blue-700 mt-1">
               {Math.abs(getTotalDebits() - getTotalCredits()) < 0.01
@@ -1503,8 +1489,7 @@ export default function GeneralLedger({
                               Total Debits
                             </div>
                             <div className="text-xl font-bold text-green-800">
-                              {getDefaultCurrency()}
-                              {getBatchTotalDebits().toLocaleString()}
+                              {formatCurrencyCompact(getBatchTotalDebits())}
                             </div>
                           </div>
                           <div className="bg-red-50 p-4 rounded-lg">
@@ -1512,8 +1497,7 @@ export default function GeneralLedger({
                               Total Credits
                             </div>
                             <div className="text-xl font-bold text-red-800">
-                              {getDefaultCurrency()}
-                              {getBatchTotalCredits().toLocaleString()}
+                              {formatCurrencyCompact(getBatchTotalCredits())}
                             </div>
                           </div>
                           <div
@@ -1547,10 +1531,12 @@ export default function GeneralLedger({
                                   : "text-yellow-800"
                               }`}
                             >
-                              {getDefaultCurrency()}
-                              {Math.abs(
-                                getBatchTotalDebits() - getBatchTotalCredits(),
-                              ).toLocaleString()}
+                              {formatCurrencyCompact(
+                                Math.abs(
+                                  getBatchTotalDebits() -
+                                    getBatchTotalCredits(),
+                                ),
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2343,13 +2329,11 @@ export default function GeneralLedger({
                   <TableCell>{entry.description}</TableCell>
                   <TableCell>{entry.reference_number || "-"}</TableCell>
                   <TableCell className="text-right font-semibold">
-                    {entry.debit > 0
-                      ? `${getDefaultCurrency()}${entry.debit.toLocaleString()}`
-                      : "-"}
+                    {entry.debit > 0 ? formatCurrencyCompact(entry.debit) : "-"}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
                     {entry.credit > 0
-                      ? `${getDefaultCurrency()}${entry.credit.toLocaleString()}`
+                      ? formatCurrencyCompact(entry.credit)
                       : "-"}
                   </TableCell>
                   {(canEditLedgerSync() || canDeleteLedgerSync()) && (

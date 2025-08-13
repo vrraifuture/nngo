@@ -41,6 +41,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { createFundSourceAction } from "@/app/actions";
 import { canManageBudgetsSync, canViewFinancesSync } from "@/utils/permissions";
+import {
+  getCurrencySymbol,
+  getCurrencyCode,
+  formatCurrencyCompact,
+} from "@/utils/currency";
 
 interface FundSource {
   id: string;
@@ -91,19 +96,6 @@ export default function FundTrackingPanel({
     status: "active",
   });
   const supabase = createClient();
-
-  const getDefaultCurrency = () => {
-    try {
-      const savedDefaultCurrency = localStorage.getItem("ngo_default_currency");
-      if (savedDefaultCurrency) {
-        const defaultCurrency = JSON.parse(savedDefaultCurrency);
-        return defaultCurrency.code;
-      }
-    } catch (error) {
-      console.error("Error getting default currency:", error);
-    }
-    return "USD"; // fallback
-  };
 
   useEffect(() => {
     fetchFunds();
@@ -237,8 +229,7 @@ export default function FundTrackingPanel({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-900">
-              {getDefaultCurrency()}
-              {getTotalAmount().toLocaleString()}
+              {formatCurrencyCompact(getTotalAmount())}
             </div>
             <p className="text-xs text-green-700 mt-1">
               {funds.length} funding sources
@@ -254,8 +245,7 @@ export default function FundTrackingPanel({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-900">
-              {getDefaultCurrency()}
-              {getTotalAmount(true).toLocaleString()}
+              {formatCurrencyCompact(getTotalAmount(true))}
             </div>
             <p className="text-xs text-blue-700 mt-1">
               {funds.filter((f) => f.is_restricted).length} restricted sources
@@ -271,8 +261,7 @@ export default function FundTrackingPanel({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-900">
-              {getDefaultCurrency()}
-              {getTotalAmount(false).toLocaleString()}
+              {formatCurrencyCompact(getTotalAmount(false))}
             </div>
             <p className="text-xs text-purple-700 mt-1">
               {funds.filter((f) => !f.is_restricted).length} unrestricted
@@ -386,19 +375,18 @@ export default function FundTrackingPanel({
 
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <Label htmlFor="currency">Currency</Label>
                           <Select
                             name="currency"
-                            defaultValue={getDefaultCurrency()}
+                            defaultValue={getCurrencyCode()}
                           >
                             <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="RWF">RWF</SelectItem>
                               <SelectItem value="USD">USD</SelectItem>
                               <SelectItem value="EUR">EUR</SelectItem>
                               <SelectItem value="GBP">GBP</SelectItem>
-                              <SelectItem value="RWF">RWF</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -825,11 +813,7 @@ export default function FundTrackingPanel({
                   <TableCell>{fund.donor_name}</TableCell>
                   <TableCell>{fund.project_name}</TableCell>
                   <TableCell className="font-semibold">
-                    {fund.currency ===
-                    getDefaultCurrency().replace(/[^A-Z]/g, "")
-                      ? getDefaultCurrency()
-                      : fund.currency}
-                    {fund.amount.toLocaleString()}
+                    {formatCurrencyCompact(fund.amount)}
                   </TableCell>
                   <TableCell>
                     <Badge

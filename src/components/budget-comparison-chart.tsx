@@ -66,6 +66,11 @@ import {
   canEditBudgetsSync,
   canDeleteBudgetsSync,
 } from "@/utils/permissions";
+import {
+  getCurrencySymbol,
+  formatCurrencyCompact,
+  getCurrencyCode,
+} from "@/utils/currency";
 
 interface Project {
   id: string;
@@ -102,20 +107,6 @@ export default function BudgetComparisonChart({
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const supabase = createClient();
-
-  // Get default currency
-  const getDefaultCurrency = () => {
-    try {
-      const savedDefaultCurrency = localStorage.getItem("ngo_default_currency");
-      if (savedDefaultCurrency) {
-        const defaultCurrency = JSON.parse(savedDefaultCurrency);
-        return defaultCurrency.symbol || "$";
-      }
-    } catch (error) {
-      console.error("Error getting default currency:", error);
-    }
-    return "$"; // fallback
-  };
 
   useEffect(() => {
     fetchBudgetData();
@@ -828,8 +819,7 @@ export default function BudgetComparisonChart({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-900">
-              {getDefaultCurrency()}
-              {getTotalPlanned().toLocaleString()}
+              {formatCurrencyCompact(getTotalPlanned())}
             </div>
           </CardContent>
         </Card>
@@ -842,8 +832,7 @@ export default function BudgetComparisonChart({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-900">
-              {getDefaultCurrency()}
-              {getTotalActual().toLocaleString()}
+              {formatCurrencyCompact(getTotalActual())}
             </div>
           </CardContent>
         </Card>
@@ -858,8 +847,7 @@ export default function BudgetComparisonChart({
             <div
               className={`text-2xl font-bold ${getVarianceColor(getTotalVariance())}`}
             >
-              {getDefaultCurrency()}
-              {Math.abs(getTotalVariance()).toLocaleString()}
+              {formatCurrencyCompact(Math.abs(getTotalVariance()))}
             </div>
             <div className="flex items-center gap-1 mt-1">
               {getVarianceIcon(getTotalVariance())}
@@ -1142,19 +1130,16 @@ export default function BudgetComparisonChart({
                             <Label htmlFor="budget_currency">Currency</Label>
                             <Select
                               name="currency"
-                              defaultValue={
-                                getDefaultCurrency().replace(/[^A-Z]/g, "") ||
-                                "USD"
-                              }
+                              defaultValue={getCurrencyCode()}
                             >
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
+                                <SelectItem value="RWF">RWF</SelectItem>
                                 <SelectItem value="USD">USD</SelectItem>
                                 <SelectItem value="EUR">EUR</SelectItem>
                                 <SelectItem value="GBP">GBP</SelectItem>
-                                <SelectItem value="RWF">RWF</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -1291,16 +1276,16 @@ export default function BudgetComparisonChart({
                 <Label htmlFor="edit_budget_currency">Currency</Label>
                 <Select
                   name="currency"
-                  defaultValue={editingBudget?.currency || "USD"}
+                  defaultValue={editingBudget?.currency || getCurrencyCode()}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="RWF">RWF</SelectItem>
                     <SelectItem value="USD">USD</SelectItem>
                     <SelectItem value="EUR">EUR</SelectItem>
                     <SelectItem value="GBP">GBP</SelectItem>
-                    <SelectItem value="RWF">RWF</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1415,11 +1400,7 @@ export default function BudgetComparisonChart({
                   <TableCell>{budget.budget_categories?.name || "-"}</TableCell>
                   <TableCell>{budget.projects?.name || "-"}</TableCell>
                   <TableCell className="text-right font-semibold">
-                    {budget.currency ===
-                    getDefaultCurrency().replace(/[^A-Z]/g, "")
-                      ? getDefaultCurrency()
-                      : budget.currency}
-                    {budget.planned_amount.toLocaleString()}
+                    {formatCurrencyCompact(budget.planned_amount)}
                   </TableCell>
                   <TableCell>
                     {budget.period_start && budget.period_end
@@ -1493,13 +1474,13 @@ export default function BudgetComparisonChart({
                   />
                   <YAxis
                     tickFormatter={(value) =>
-                      `${getDefaultCurrency()}${(value / 1000).toFixed(0)}k`
+                      `${getCurrencySymbol()}${(value / 1000).toFixed(0)}k`
                     }
                     fontSize={12}
                   />
                   <Tooltip
                     formatter={(value: number, name: string) => [
-                      `${getDefaultCurrency()}${value.toLocaleString()}`,
+                      formatCurrencyCompact(value),
                       name === "planned" ? "Planned" : "Actual",
                     ]}
                   />
@@ -1532,7 +1513,7 @@ export default function BudgetComparisonChart({
                   </Pie>
                   <Tooltip
                     formatter={(value: number, name: string, props: any) => [
-                      `${getDefaultCurrency()}${value.toLocaleString()}`,
+                      formatCurrencyCompact(value),
                       "Actual Spent",
                     ]}
                     labelFormatter={(label) => `Category: ${label}`}
@@ -1584,18 +1565,15 @@ export default function BudgetComparisonChart({
                   <tr key={index} className="border-b hover:bg-gray-50">
                     <td className="p-2 font-medium">{item.category}</td>
                     <td className="p-2 text-right">
-                      {getDefaultCurrency()}
-                      {item.planned.toLocaleString()}
+                      {formatCurrencyCompact(item.planned)}
                     </td>
                     <td className="p-2 text-right">
-                      {getDefaultCurrency()}
-                      {item.actual.toLocaleString()}
+                      {formatCurrencyCompact(item.actual)}
                     </td>
                     <td
                       className={`p-2 text-right font-semibold ${getVarianceColor(item.variance)}`}
                     >
-                      {getDefaultCurrency()}
-                      {Math.abs(item.variance).toLocaleString()}
+                      {formatCurrencyCompact(Math.abs(item.variance))}
                     </td>
                     <td
                       className={`p-2 text-right font-semibold ${getVarianceColor(item.variance)}`}

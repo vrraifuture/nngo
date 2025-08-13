@@ -437,38 +437,54 @@ export default function ReportGeneration({
           funds?.reduce((sum, fund) => sum + fund.amount, 0) || 0;
         const totalExpenses =
           expenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+        const remainingBalance = totalFunds - totalExpenses;
+        const utilizationRate =
+          totalFunds > 0
+            ? ((totalExpenses / totalFunds) * 100).toFixed(1)
+            : "0";
 
         reportData = `
           <div class="summary-card">
-            <h3>Financial Summary</h3>
-            <p><strong>Total Funds Received:</strong> ${totalFunds.toLocaleString()}</p>
-            <p><strong>Total Expenses:</strong> ${totalExpenses.toLocaleString()}</p>
-            <p><strong>Remaining Balance:</strong> ${(totalFunds - totalExpenses).toLocaleString()}</p>
+            <h3>Financial Summary Report</h3>
+            <p><strong>Total Funds Received:</strong> FRw ${totalFunds.toLocaleString()}</p>
+            <p><strong>Total Expenses:</strong> FRw ${totalExpenses.toLocaleString()}</p>
+            <p><strong>Remaining Balance:</strong> FRw ${remainingBalance.toLocaleString()}</p>
+            <p><strong>Fund Utilization Rate:</strong> ${utilizationRate}%</p>
+            <p><strong>Report Period:</strong> ${report.parameters?.dateFrom || "All time"} to ${report.parameters?.dateTo || "Present"}</p>
           </div>
           <table class="data-table">
             <thead>
-              <tr><th>Expense Title</th><th>Category</th><th>Amount</th><th>Date</th><th>Status</th></tr>
+              <tr><th>Expense Title</th><th>Category</th><th>Amount (FRw)</th><th>Date</th><th>Status</th></tr>
             </thead>
             <tbody>
               ${
-                expenses
-                  ?.slice(0, 10)
-                  .map(
-                    (expense) => `
-                <tr>
-                  <td>${expense.title}</td>
-                  <td>${expense.budget_categories?.name || "Uncategorized"}</td>
-                  <td>${expense.amount.toLocaleString()}</td>
-                  <td>${new Date(expense.expense_date).toLocaleDateString()}</td>
-                  <td>${expense.status}</td>
-                </tr>
-              `,
-                  )
-                  .join("") ||
-                '<tr><td colspan="5">No expense data available</td></tr>'
+                expenses && expenses.length > 0
+                  ? expenses
+                      .slice(0, 15)
+                      .map(
+                        (expense) => `
+                    <tr>
+                      <td>${expense.title || "Untitled Expense"}</td>
+                      <td>${expense.budget_categories?.name || "Uncategorized"}</td>
+                      <td>FRw ${(expense.amount || 0).toLocaleString()}</td>
+                      <td>${expense.expense_date ? new Date(expense.expense_date).toLocaleDateString() : "N/A"}</td>
+                      <td><span style="background: ${expense.status === "paid" ? "#dcfce7" : expense.status === "approved" ? "#dbeafe" : "#fef3c7"}; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${expense.status || "pending"}</span></td>
+                    </tr>
+                  `,
+                      )
+                      .join("")
+                  : '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">No expense data available for the selected period</td></tr>'
               }
             </tbody>
           </table>
+          <div class="summary-card">
+            <h4>Financial Health Indicators</h4>
+            <ul>
+              <li><strong>Approved Expenses:</strong> ${expenses?.filter((e) => e.status === "approved").length || 0} transactions</li>
+              <li><strong>Paid Expenses:</strong> ${expenses?.filter((e) => e.status === "paid").length || 0} transactions</li>
+              <li><strong>Average Expense:</strong> FRw ${expenses && expenses.length > 0 ? Math.round(totalExpenses / expenses.length).toLocaleString() : "0"}</li>
+            </ul>
+          </div>
         `;
       } else if (report.type === "expense_report") {
         const { data: expenses } = await supabase
@@ -476,28 +492,93 @@ export default function ReportGeneration({
           .select("*, budget_categories(name), projects(name)")
           .eq("status", "paid");
 
+        const totalPaidExpenses =
+          expenses?.reduce((sum, expense) => sum + (expense.amount || 0), 0) ||
+          0;
+        const expensesByCategory = new Map();
+        const expensesByProject = new Map();
+
+        expenses?.forEach((expense) => {
+          const category = expense.budget_categories?.name || "Uncategorized";
+          const project = expense.projects?.name || "General";
+
+          expensesByCategory.set(
+            category,
+            (expensesByCategory.get(category) || 0) + expense.amount,
+          );
+          expensesByProject.set(
+            project,
+            (expensesByProject.get(project) || 0) + expense.amount,
+          );
+        });
+
         reportData = `
+          <div class="summary-card">
+            <h3>Expense Analysis Report - Paid Expenses</h3>
+            <p><strong>Total Paid Expenses:</strong> FRw ${totalPaidExpenses.toLocaleString()}</p>
+            <p><strong>Number of Transactions:</strong> ${expenses?.length || 0}</p>
+            <p><strong>Report Period:</strong> ${report.parameters?.dateFrom || "All time"} to ${report.parameters?.dateTo || "Present"}</p>
+            <p><strong>Average Transaction:</strong> FRw ${expenses && expenses.length > 0 ? Math.round(totalPaidExpenses / expenses.length).toLocaleString() : "0"}</p>
+          </div>
+          
+          <div class="summary-card">
+            <h4>Expenses by Category</h4>
+            <table class="data-table" style="margin-bottom: 20px;">
+              <thead>
+                <tr><th>Category</th><th>Amount (FRw)</th><th>Percentage</th></tr>
+              </thead>
+              <tbody>
+                ${
+                  Array.from(expensesByCategory.entries())
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([category, amount]) => {
+                      const percentage =
+                        totalPaidExpenses > 0
+                          ? ((amount / totalPaidExpenses) * 100).toFixed(1)
+                          : "0";
+                      return `
+                        <tr>
+                          <td>${category}</td>
+                          <td>FRw ${amount.toLocaleString()}</td>
+                          <td>${percentage}%</td>
+                        </tr>
+                      `;
+                    })
+                    .join("") ||
+                  '<tr><td colspan="3">No category data available</td></tr>'
+                }
+              </tbody>
+            </table>
+          </div>
+          
           <table class="data-table">
             <thead>
-              <tr><th>Title</th><th>Category</th><th>Project</th><th>Amount</th><th>Date</th><th>Status</th></tr>
+              <tr><th>Title</th><th>Category</th><th>Project</th><th>Amount (FRw)</th><th>Date</th><th>Status</th></tr>
             </thead>
             <tbody>
               ${
-                expenses
-                  ?.map(
-                    (expense) => `
-                <tr>
-                  <td>${expense.title}</td>
-                  <td>${expense.budget_categories?.name || "Uncategorized"}</td>
-                  <td>${expense.projects?.name || "General"}</td>
-                  <td>${expense.amount.toLocaleString()}</td>
-                  <td>${new Date(expense.expense_date).toLocaleDateString()}</td>
-                  <td>paid</td>
-                </tr>
-              `,
-                  )
-                  .join("") ||
-                '<tr><td colspan="6">No paid expense data available</td></tr>'
+                expenses && expenses.length > 0
+                  ? expenses
+                      .sort(
+                        (a, b) =>
+                          new Date(b.expense_date || 0).getTime() -
+                          new Date(a.expense_date || 0).getTime(),
+                      )
+                      .slice(0, 20)
+                      .map(
+                        (expense) => `
+                    <tr>
+                      <td>${expense.title || "Untitled Expense"}</td>
+                      <td>${expense.budget_categories?.name || "Uncategorized"}</td>
+                      <td>${expense.projects?.name || "General"}</td>
+                      <td>FRw ${(expense.amount || 0).toLocaleString()}</td>
+                      <td>${expense.expense_date ? new Date(expense.expense_date).toLocaleDateString() : "N/A"}</td>
+                      <td><span style="background: #dcfce7; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #166534;">PAID</span></td>
+                    </tr>
+                  `,
+                      )
+                      .join("")
+                  : '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">No paid expense data available</td></tr>'
               }
             </tbody>
           </table>
