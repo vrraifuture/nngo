@@ -910,26 +910,30 @@ export default function GeneralLedger({
   };
 
   const parseCSV = (csvText: string): string[][] => {
-    const lines = csvText.split("\n").filter((line) => line.trim());
-    return lines.map((line) => {
-      const result = [];
-      let current = "";
-      let inQuotes = false;
+    const lines = csvText.split("\n");
+    return lines
+      .filter(
+        (line) => line.trim() && !line.split(",").every((cell) => !cell.trim()),
+      ) // Filter out empty rows
+      .map((line) => {
+        const result = [];
+        let current = "";
+        let inQuotes = false;
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === "," && !inQuotes) {
-          result.push(current.trim());
-          current = "";
-        } else {
-          current += char;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === "," && !inQuotes) {
+            result.push(current.trim());
+            current = "";
+          } else {
+            current += char;
+          }
         }
-      }
-      result.push(current.trim());
-      return result;
-    });
+        result.push(current.trim());
+        return result;
+      });
   };
 
   const validateImportRow = (
@@ -937,6 +941,15 @@ export default function GeneralLedger({
     rowIndex: number,
   ): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
+
+    // Skip completely empty rows
+    if (
+      !row ||
+      row.length === 0 ||
+      row.every((cell) => !cell || !cell.trim())
+    ) {
+      return { isValid: false, errors: [] }; // Return no errors for empty rows, just mark as invalid
+    }
 
     // Check if row has minimum required columns
     if (row.length < 6) {
@@ -960,7 +973,7 @@ export default function GeneralLedger({
     if (!date || !date.trim()) {
       errors.push(`Row ${rowIndex + 1}: Date is required.`);
     } else {
-      const dateObj = new Date(date);
+      const dateObj = new Date(date.trim());
       if (isNaN(dateObj.getTime())) {
         errors.push(
           `Row ${rowIndex + 1}: Invalid date format. Use YYYY-MM-DD.`,
@@ -988,8 +1001,8 @@ export default function GeneralLedger({
     }
 
     // Validate debit/credit amounts
-    const debitAmount = parseFloat(debit) || 0;
-    const creditAmount = parseFloat(credit) || 0;
+    const debitAmount = parseFloat(debit?.trim() || "0") || 0;
+    const creditAmount = parseFloat(credit?.trim() || "0") || 0;
 
     if (debitAmount < 0 || creditAmount < 0) {
       errors.push(
@@ -1070,15 +1083,16 @@ export default function GeneralLedger({
             account_name: selectedAccount?.name || accountName.trim(),
             date: date.trim(),
             description: description.trim(),
-            debit: parseFloat(debit) || 0,
-            credit: parseFloat(credit) || 0,
+            debit: parseFloat(debit?.trim() || "0") || 0,
+            credit: parseFloat(credit?.trim() || "0") || 0,
             reference_number: reference?.trim() || undefined,
             created_by: "Imported",
             created_at: new Date().toISOString(),
           };
 
           validEntries.push(entry);
-        } else {
+        } else if (errors.length > 0) {
+          // Only add errors if there are actual validation errors (not just empty rows)
           allErrors.push(...errors);
         }
       });
@@ -1288,121 +1302,225 @@ export default function GeneralLedger({
                         className="flex items-center gap-2"
                       >
                         <Upload className="h-4 w-4" />
-                        Import CSV
+                        Import Ledger Entries
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>Import Ledger Entries</DialogTitle>
+                        <DialogTitle className="text-lg font-semibold">
+                          Import Ledger Entries from CSV/Excel
+                        </DialogTitle>
                         <DialogDescription>
-                          Import ledger entries from a CSV file. The CSV should
-                          have columns: Date, Account Code, Account Name,
-                          Description, Reference, Debit, Credit.
+                          Import multiple ledger entries at once from a CSV or
+                          Excel file. This feature supports bulk data entry with
+                          validation and error reporting.
                         </DialogDescription>
                       </DialogHeader>
-                      <div className="space-y-4 pr-2">
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <h4 className="font-medium text-gray-800 mb-1">
-                              Step 1: Download Template
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Download the CSV template with sample data and
-                              format
-                            </p>
+                      <div className="space-y-6 pr-2">
+                        {/* Step 1: Download Template */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h4 className="font-semibold text-blue-900 mb-1">
+                                📋 Step 1: Download Import Template
+                              </h4>
+                              <p className="text-sm text-blue-700">
+                                Get the properly formatted CSV template with
+                                sample data and column headers
+                              </p>
+                            </div>
+                            <Button
+                              onClick={downloadImportTemplate}
+                              variant="outline"
+                              className="flex items-center gap-2 border-blue-300 text-blue-700 hover:bg-blue-100"
+                            >
+                              <Download className="h-4 w-4" />
+                              Download Template
+                            </Button>
                           </div>
-                          <Button
-                            onClick={downloadImportTemplate}
-                            variant="outline"
-                            className="flex items-center gap-2"
-                          >
-                            <Download className="h-4 w-4" />
-                            Download Template
-                          </Button>
+                          <div className="text-xs text-blue-600 bg-blue-100 p-2 rounded">
+                            💡 The template includes sample entries showing the
+                            correct format and all required columns
+                          </div>
                         </div>
 
-                        <div className="border-t pt-4">
-                          <h4 className="font-medium text-gray-800 mb-2">
-                            Step 2: Upload Your File
+                        {/* Step 2: Upload File */}
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <h4 className="font-semibold text-green-900 mb-3">
+                            📤 Step 2: Upload Your Prepared File
                           </h4>
-                          <Label htmlFor="csv-file">Select CSV File</Label>
-                          <Input
-                            id="csv-file"
-                            type="file"
-                            accept=".csv"
-                            onChange={handleFileSelect}
-                            className="mt-1"
-                          />
-                          <p className="text-sm text-gray-500 mt-1">
-                            CSV format: Date, Account Code, Account Name,
-                            Description, Reference, Debit, Credit
-                          </p>
+                          <div className="space-y-3">
+                            <div>
+                              <Label
+                                htmlFor="csv-file"
+                                className="text-sm font-medium text-green-800"
+                              >
+                                Select CSV or Excel File
+                              </Label>
+                              <Input
+                                id="csv-file"
+                                type="file"
+                                accept=".csv,.xlsx,.xls"
+                                onChange={handleFileSelect}
+                                className="mt-1 border-green-300 focus:border-green-500"
+                              />
+                              <p className="text-xs text-green-600 mt-1">
+                                Supported formats: CSV (.csv), Excel (.xlsx,
+                                .xls)
+                              </p>
+                            </div>
+                          </div>
                         </div>
 
+                        {/* File Preview */}
                         {importFile && (
-                          <div className="p-3 bg-blue-50 rounded-lg">
-                            <p className="text-sm font-medium text-blue-800">
-                              Selected file: {importFile.name}
-                            </p>
-                            <p className="text-xs text-blue-600">
-                              Size: {(importFile.size / 1024).toFixed(1)} KB
-                            </p>
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <h4 className="font-semibold text-yellow-900 mb-2">
+                              📄 File Ready for Import
+                            </h4>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-yellow-800">
+                                  📁 {importFile.name}
+                                </p>
+                                <p className="text-xs text-yellow-600">
+                                  Size: {(importFile.size / 1024).toFixed(1)} KB
+                                  | Type: {importFile.type || "Unknown"}
+                                </p>
+                              </div>
+                              <Button
+                                onClick={handleImportCSV}
+                                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                              >
+                                🚀 Process Import
+                              </Button>
+                            </div>
                           </div>
                         )}
 
+                        {/* Import Results */}
                         {importResults && (
-                          <div className="space-y-3">
-                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                              <h4 className="font-medium text-green-800 mb-2">
-                                Import Results
+                          <div className="space-y-4">
+                            {/* Success Summary */}
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                              <h4 className="font-semibold text-green-800 mb-2 flex items-center gap-2">
+                                ✅ Import Completed Successfully
                               </h4>
-                              <p className="text-sm text-green-700">
-                                Successfully imported: {importResults.success}{" "}
-                                out of {importResults.total} entries
-                              </p>
+                              <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div className="text-center">
+                                  <div className="text-2xl font-bold text-green-700">
+                                    {importResults.success}
+                                  </div>
+                                  <div className="text-green-600">Imported</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-2xl font-bold text-red-700">
+                                    {importResults.errors.length}
+                                  </div>
+                                  <div className="text-red-600">Errors</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-2xl font-bold text-blue-700">
+                                    {importResults.total}
+                                  </div>
+                                  <div className="text-blue-600">
+                                    Total Rows
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-3 text-sm text-green-700">
+                                🎉 Successfully imported {importResults.success}{" "}
+                                ledger entries out of {importResults.total}{" "}
+                                total rows processed.
+                              </div>
                             </div>
 
+                            {/* Error Details */}
                             {importResults.errors.length > 0 && (
-                              <div className="p-4 bg-red-50 border border-red-200 rounded-lg max-h-40 overflow-y-auto">
-                                <h4 className="font-medium text-red-800 mb-2">
-                                  Errors ({importResults.errors.length})
+                              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <h4 className="font-semibold text-red-800 mb-2 flex items-center gap-2">
+                                  ⚠️ Import Errors (
+                                  {importResults.errors.length})
                                 </h4>
-                                <ul className="text-sm text-red-700 space-y-1">
-                                  {importResults.errors.map((error, index) => (
-                                    <li
-                                      key={index}
-                                      className="list-disc list-inside"
-                                    >
-                                      {error}
-                                    </li>
-                                  ))}
-                                </ul>
+                                <div className="max-h-40 overflow-y-auto bg-white border border-red-200 rounded p-3">
+                                  <ul className="text-sm text-red-700 space-y-2">
+                                    {importResults.errors.map(
+                                      (error, index) => (
+                                        <li
+                                          key={index}
+                                          className="flex items-start gap-2"
+                                        >
+                                          <span className="text-red-500 font-bold">
+                                            •
+                                          </span>
+                                          <span>{error}</span>
+                                        </li>
+                                      ),
+                                    )}
+                                  </ul>
+                                </div>
+                                <div className="mt-2 text-xs text-red-600">
+                                  💡 Fix these errors in your file and re-import
+                                  to include the failed entries
+                                </div>
                               </div>
                             )}
                           </div>
                         )}
 
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-gray-800 mb-2">
-                            CSV Format Requirements:
+                        {/* Format Requirements */}
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                          <h4 className="font-semibold text-gray-800 mb-3">
+                            📋 CSV/Excel Format Requirements
                           </h4>
-                          <ul className="text-sm text-gray-600 space-y-1">
-                            <li>
-                              • Date: YYYY-MM-DD format (e.g., 2024-01-15)
-                            </li>
-                            <li>
-                              • Account Code: Must exist in your chart of
-                              accounts
-                            </li>
-                            <li>• Description: Required for each entry</li>
-                            <li>
-                              • Debit/Credit: Use only one per row, not both
-                            </li>
-                            <li>• Reference: Optional reference number</li>
-                          </ul>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                            <div>
+                              <h5 className="font-medium text-gray-800 mb-2">
+                                Required Columns:
+                              </h5>
+                              <ul className="space-y-1">
+                                <li>
+                                  • <strong>Date:</strong> YYYY-MM-DD format
+                                  (e.g., 2024-01-15)
+                                </li>
+                                <li>
+                                  • <strong>Account Code:</strong> Must exist in
+                                  chart of accounts
+                                </li>
+                                <li>
+                                  • <strong>Description:</strong> Transaction
+                                  description (required)
+                                </li>
+                                <li>
+                                  • <strong>Debit OR Credit:</strong> Amount
+                                  (use only one per row)
+                                </li>
+                              </ul>
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-800 mb-2">
+                                Optional Columns:
+                              </h5>
+                              <ul className="space-y-1">
+                                <li>
+                                  • <strong>Account Name:</strong> Auto-filled
+                                  if blank
+                                </li>
+                                <li>
+                                  • <strong>Reference:</strong> Optional
+                                  reference number
+                                </li>
+                              </ul>
+                              <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-700">
+                                💡 <strong>Tip:</strong> Leave Debit blank when
+                                entering Credit amounts, and vice versa
+                              </div>
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-4">
+                        {/* Action Buttons */}
+                        <div className="flex justify-end gap-3 pt-4 border-t">
                           <Button
                             type="button"
                             variant="outline"
@@ -1414,12 +1532,15 @@ export default function GeneralLedger({
                           >
                             Cancel
                           </Button>
-                          <Button
-                            onClick={handleImportCSV}
-                            disabled={!importFile}
-                          >
-                            Import Entries
-                          </Button>
+                          {!importFile && (
+                            <Button
+                              onClick={downloadImportTemplate}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Get Template First
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </DialogContent>

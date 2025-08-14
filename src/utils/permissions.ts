@@ -794,7 +794,7 @@ export const initializeDefaultPermissions = async (
         granted: true,
       })),
 
-      // Accountant permissions - CAN ADD but CANNOT EDIT/DELETE
+      // Accountant permissions - CAN ADD but CANNOT EDIT/DELETE ANYTHING
       ...[
         "view_finances",
         "view_ledger",
@@ -806,13 +806,15 @@ export const initializeDefaultPermissions = async (
         "manage_budgets", // Allow adding budgets
         "manage_ledger", // Allow adding ledger entries
         "generate_reports", // Allow generating reports
+        "manage_donors", // Allow adding donors
+        "manage_projects", // Allow adding projects
       ].map((permissionId) => ({
         organization_id: orgId,
         role: "accountant",
         permission_id: permissionId,
-        granted: true, // View permissions + add permissions
+        granted: true, // View permissions + add permissions ONLY
       })),
-      // ALL edit/delete/settings permissions are DENIED for accountant
+      // ALL edit/delete/settings permissions are EXPLICITLY DENIED for accountant
       ...[
         "edit_expenses", // DENIED - cannot edit expenses
         "delete_expenses", // DENIED - cannot delete expenses
@@ -820,36 +822,34 @@ export const initializeDefaultPermissions = async (
         "delete_budgets", // DENIED - cannot delete budgets
         "edit_ledger", // DENIED - cannot edit ledger entries
         "delete_ledger", // DENIED - cannot delete ledger entries
-        "manage_projects",
-        "edit_projects",
-        "delete_projects",
-        "manage_donors",
-        "edit_donors",
-        "delete_donors",
-        "edit_reports",
-        "delete_reports",
-        "manage_users",
-        "edit_users",
-        "delete_users",
+        "edit_projects", // DENIED - cannot edit projects
+        "delete_projects", // DENIED - cannot delete projects
+        "edit_donors", // DENIED - cannot edit donors
+        "delete_donors", // DENIED - cannot delete donors
+        "edit_reports", // DENIED - cannot edit reports
+        "delete_reports", // DENIED - cannot delete reports
+        "manage_users", // DENIED - cannot manage users
+        "edit_users", // DENIED - cannot edit users
+        "delete_users", // DENIED - cannot delete users
         "manage_settings", // DENIED - cannot access settings
-        "edit_settings",
+        "edit_settings", // DENIED - cannot edit settings
         "view_settings", // DENIED - cannot view settings
-        "manage_currencies",
-        "edit_currencies",
-        "delete_currencies",
-        "manage_categories",
-        "edit_categories",
-        "delete_categories",
-        "manage_accounts",
-        "edit_accounts",
-        "delete_accounts",
-        "manage_permissions",
-        "assign_roles",
+        "manage_currencies", // DENIED - cannot manage currencies
+        "edit_currencies", // DENIED - cannot edit currencies
+        "delete_currencies", // DENIED - cannot delete currencies
+        "manage_categories", // DENIED - cannot manage categories
+        "edit_categories", // DENIED - cannot edit categories
+        "delete_categories", // DENIED - cannot delete categories
+        "manage_accounts", // DENIED - cannot manage accounts
+        "edit_accounts", // DENIED - cannot edit accounts
+        "delete_accounts", // DENIED - cannot delete accounts
+        "manage_permissions", // DENIED - cannot manage permissions
+        "assign_roles", // DENIED - cannot assign roles
       ].map((permissionId) => ({
         organization_id: orgId,
         role: "accountant",
         permission_id: permissionId,
-        granted: false, // ALL edit/delete/settings permissions DENIED
+        granted: false, // ALL edit/delete/settings permissions EXPLICITLY DENIED
       })),
     ];
 

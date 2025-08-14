@@ -25,7 +25,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DollarSign, Filter, Eye, EyeOff, Plus } from "lucide-react";
+import {
+  DollarSign,
+  Filter,
+  Eye,
+  EyeOff,
+  Plus,
+  Edit,
+  Trash2,
+} from "lucide-react";
 import { createClient } from "../../supabase/client";
 import {
   Dialog,
@@ -76,6 +84,9 @@ export default function FundTrackingPanel({
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddDonorDialog, setShowAddDonorDialog] = useState(false);
   const [showAddProjectDialog, setShowAddProjectDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingFund, setEditingFund] = useState<FundSource | null>(null);
+  const [allowEditDelete, setAllowEditDelete] = useState(false);
   const [canManage, setCanManage] = useState(false);
   const [donors, setDonors] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -102,7 +113,20 @@ export default function FundTrackingPanel({
     fetchDonors();
     fetchProjects();
     checkPermissions();
+    loadSettings();
   }, []);
+
+  const loadSettings = () => {
+    try {
+      const settings = localStorage.getItem("ngo_fund_tracking_settings");
+      if (settings) {
+        const parsed = JSON.parse(settings);
+        setAllowEditDelete(parsed.allowEditDelete || false);
+      }
+    } catch (error) {
+      console.error("Error loading fund tracking settings:", error);
+    }
+  };
 
   useEffect(() => {
     applyFilters();
@@ -216,6 +240,36 @@ export default function FundTrackingPanel({
       </div>
     );
   }
+
+  const handleEditFund = (fund: FundSource) => {
+    setEditingFund(fund);
+    setShowEditDialog(true);
+  };
+
+  const handleDeleteFund = async (fundId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this fund source? This action cannot be undone.",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("fund_sources")
+        .delete()
+        .eq("id", fundId);
+
+      if (error) throw error;
+
+      fetchFunds();
+      alert("Fund source deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting fund:", error);
+      alert("Error deleting fund source. Please try again.");
+    }
+  };
 
   return (
     <div className="space-y-6 bg-white">
@@ -785,6 +839,171 @@ export default function FundTrackingPanel({
         </DialogContent>
       </Dialog>
 
+      {/* Edit Fund Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Fund Source</DialogTitle>
+            <DialogDescription>
+              Update the details of this funding source
+            </DialogDescription>
+          </DialogHeader>
+          {editingFund && (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const formData = new FormData(e.currentTarget);
+                  const { error } = await supabase
+                    .from("fund_sources")
+                    .update({
+                      name: formData.get("name"),
+                      amount: parseFloat(formData.get("amount") as string),
+                      currency: formData.get("currency"),
+                      donor_id: formData.get("donor_id") || null,
+                      project_id: formData.get("project_id") || null,
+                      received_date: formData.get("received_date"),
+                      is_restricted: formData.get("is_restricted") === "true",
+                      restrictions: formData.get("restrictions") || null,
+                    })
+                    .eq("id", editingFund.id);
+
+                  if (error) throw error;
+
+                  fetchFunds();
+                  setShowEditDialog(false);
+                  setEditingFund(null);
+                  alert("Fund source updated successfully!");
+                } catch (error) {
+                  console.error("Error updating fund:", error);
+                  alert("Error updating fund source. Please try again.");
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit_name">Fund Name *</Label>
+                  <Input
+                    id="edit_name"
+                    name="name"
+                    defaultValue={editingFund.name}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit_amount">Amount *</Label>
+                  <Input
+                    id="edit_amount"
+                    name="amount"
+                    type="number"
+                    step="0.01"
+                    defaultValue={editingFund.amount}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="edit_currency">Currency</Label>
+                  <Select name="currency" defaultValue={editingFund.currency}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="RWF">RWF</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="edit_donor_id">Donor</Label>
+                  <Select name="donor_id" defaultValue={editingFund.donor_name}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select donor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {donors.map((donor) => (
+                        <SelectItem key={donor.id} value={donor.id}>
+                          {donor.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="edit_project_id">Project</Label>
+                  <Select
+                    name="project_id"
+                    defaultValue={editingFund.project_name}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit_received_date">Received Date</Label>
+                <Input
+                  id="edit_received_date"
+                  name="received_date"
+                  type="date"
+                  defaultValue={editingFund.received_date.split("T")[0]}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="edit_is_restricted"
+                  name="is_restricted"
+                  value="true"
+                  defaultChecked={editingFund.is_restricted}
+                />
+                <Label htmlFor="edit_is_restricted">
+                  This is a restricted fund
+                </Label>
+              </div>
+
+              <div>
+                <Label htmlFor="edit_restrictions">Restrictions</Label>
+                <Textarea
+                  id="edit_restrictions"
+                  name="restrictions"
+                  defaultValue={editingFund.restrictions || ""}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowEditDialog(false);
+                    setEditingFund(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Update Fund Source</Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Funds Table */}
       <Card>
         <CardHeader>
@@ -804,6 +1023,7 @@ export default function FundTrackingPanel({
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Received Date</TableHead>
+                {canManage && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -835,6 +1055,33 @@ export default function FundTrackingPanel({
                   <TableCell>
                     {new Date(fund.received_date).toLocaleDateString()}
                   </TableCell>
+                  {canManage && allowEditDelete && (
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditFund(fund)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteFund(fund.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
+                  {canManage && !allowEditDelete && (
+                    <TableCell>
+                      <span className="text-sm text-gray-500">View Only</span>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
