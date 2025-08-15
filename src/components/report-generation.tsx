@@ -663,64 +663,85 @@ export default function ReportGeneration({
         let expenses = [];
 
         try {
-          console.log("Fetching expenses for expense report...");
-          const { data: expensesData, error: expensesError } = await supabase
-            .from("expenses")
-            .select(
-              "amount, title, expense_date, status, budget_categories(name), projects(name)",
-            )
-            .eq("status", "paid")
-            .order("expense_date", { ascending: false });
+          console.log("Fetching ALL expenses for expense report...");
 
-          if (!expensesError && expensesData && expensesData.length > 0) {
-            expenses = expensesData;
-            console.log(`Found ${expenses.length} paid expenses from database`);
-          } else {
+          // First, try to get all expenses (not just paid ones)
+          const { data: allExpensesData, error: allExpensesError } =
+            await supabase
+              .from("expenses")
+              .select(
+                "amount, title, expense_date, status, budget_categories(name), projects(name)",
+              )
+              .in("status", ["approved", "paid", "pending"]) // Include all relevant statuses
+              .order("expense_date", { ascending: false });
+
+          if (
+            !allExpensesError &&
+            allExpensesData &&
+            allExpensesData.length > 0
+          ) {
+            expenses = allExpensesData;
             console.log(
-              "No paid expenses found in database or error occurred:",
-              expensesError,
+              `Found ${expenses.length} expenses from database (all statuses)`,
             );
-            // Use fallback data if database fails
-            expenses = [
-              {
-                title: "Sample Program Expense",
-                amount: 25000,
-                expense_date: new Date().toISOString(),
-                status: "paid",
-                budget_categories: { name: "Program Expenses" },
-                projects: { name: "Education Project" },
-              },
-              {
-                title: "Administrative Costs",
-                amount: 15000,
-                expense_date: new Date().toISOString(),
-                status: "paid",
-                budget_categories: { name: "Administrative" },
-                projects: { name: "General Operations" },
-              },
-            ];
+          } else {
+            console.log("Trying to fetch just paid expenses...");
+
+            // Fallback: try to get just paid expenses
+            const { data: paidExpensesData, error: paidExpensesError } =
+              await supabase
+                .from("expenses")
+                .select(
+                  "amount, title, expense_date, status, budget_categories(name), projects(name)",
+                )
+                .eq("status", "paid")
+                .order("expense_date", { ascending: false });
+
+            if (
+              !paidExpensesError &&
+              paidExpensesData &&
+              paidExpensesData.length > 0
+            ) {
+              expenses = paidExpensesData;
+              console.log(
+                `Found ${expenses.length} paid expenses from database`,
+              );
+            } else {
+              console.log("Trying to fetch ANY expenses...");
+
+              // Final attempt: get any expenses without status filter
+              const { data: anyExpensesData, error: anyExpensesError } =
+                await supabase
+                  .from("expenses")
+                  .select(
+                    "amount, title, expense_date, status, budget_categories(name), projects(name)",
+                  )
+                  .order("expense_date", { ascending: false })
+                  .limit(50); // Limit to prevent too much data
+
+              if (
+                !anyExpensesError &&
+                anyExpensesData &&
+                anyExpensesData.length > 0
+              ) {
+                expenses = anyExpensesData;
+                console.log(
+                  `Found ${expenses.length} expenses from database (any status)`,
+                );
+              } else {
+                console.log(
+                  "No expenses found in database or error occurred:",
+                  anyExpensesError || allExpensesError,
+                );
+                // Use minimal fallback data only if absolutely no data exists
+                expenses = [];
+              }
+            }
           }
         } catch (error) {
           console.error("Error fetching expenses for expense report:", error);
-          // Use fallback data if database fails
-          expenses = [
-            {
-              title: "Sample Program Expense",
-              amount: 25000,
-              expense_date: new Date().toISOString(),
-              status: "paid",
-              budget_categories: { name: "Program Expenses" },
-              projects: { name: "Education Project" },
-            },
-            {
-              title: "Administrative Costs",
-              amount: 15000,
-              expense_date: new Date().toISOString(),
-              status: "paid",
-              budget_categories: { name: "Administrative" },
-              projects: { name: "General Operations" },
-            },
-          ];
+          // Use empty array - let the report show "no data" message
+          expenses = [];
         }
 
         const totalPaidExpenses = expenses.reduce(
@@ -820,10 +841,12 @@ export default function ReportGeneration({
         let expenses = [];
 
         try {
-          console.log("Fetching budgets for budget variance report...");
+          console.log("Fetching ALL budgets for budget variance report...");
           const { data: budgetsData, error: budgetsError } = await supabase
             .from("budgets")
-            .select("planned_amount, budget_categories(name)")
+            .select(
+              "planned_amount, budget_categories(name), project_id, created_at",
+            )
             .order("created_at", { ascending: false });
 
           if (!budgetsError && budgetsData && budgetsData.length > 0) {
@@ -834,44 +857,20 @@ export default function ReportGeneration({
               "No budgets found in database or error occurred:",
               budgetsError,
             );
-            // Use fallback data
-            budgets = [
-              {
-                planned_amount: 50000,
-                budget_categories: { name: "Program Expenses" },
-              },
-              {
-                planned_amount: 25000,
-                budget_categories: { name: "Administrative" },
-              },
-              {
-                planned_amount: 80000,
-                budget_categories: { name: "Personnel" },
-              },
-            ];
+            // Only use fallback if absolutely no data exists
+            budgets = [];
           }
         } catch (error) {
           console.error("Error fetching budgets:", error);
-          // Use fallback data
-          budgets = [
-            {
-              planned_amount: 50000,
-              budget_categories: { name: "Program Expenses" },
-            },
-            {
-              planned_amount: 25000,
-              budget_categories: { name: "Administrative" },
-            },
-            { planned_amount: 80000, budget_categories: { name: "Personnel" } },
-          ];
+          budgets = [];
         }
 
         try {
-          console.log("Fetching expenses for budget variance report...");
+          console.log("Fetching ALL expenses for budget variance report...");
           const { data: expensesData, error: expensesError } = await supabase
             .from("expenses")
-            .select("amount, budget_categories(name)")
-            .in("status", ["approved", "paid"])
+            .select("amount, budget_categories(name), status, expense_date")
+            .in("status", ["approved", "paid", "pending"]) // Include all relevant expenses
             .order("expense_date", { ascending: false });
 
           if (!expensesError && expensesData && expensesData.length > 0) {
@@ -884,24 +883,31 @@ export default function ReportGeneration({
               "No expenses found for budget variance or error occurred:",
               expensesError,
             );
-            // Use fallback data
-            expenses = [
-              {
-                amount: 45000,
-                budget_categories: { name: "Program Expenses" },
-              },
-              { amount: 28000, budget_categories: { name: "Administrative" } },
-              { amount: 75000, budget_categories: { name: "Personnel" } },
-            ];
+            // Try without status filter
+            const { data: allExpensesData, error: allExpensesError } =
+              await supabase
+                .from("expenses")
+                .select("amount, budget_categories(name), status, expense_date")
+                .order("expense_date", { ascending: false })
+                .limit(100);
+
+            if (
+              !allExpensesError &&
+              allExpensesData &&
+              allExpensesData.length > 0
+            ) {
+              expenses = allExpensesData;
+              console.log(
+                `Found ${expenses.length} expenses (all statuses) for budget variance`,
+              );
+            } else {
+              console.log("No expenses found at all for budget variance");
+              expenses = [];
+            }
           }
         } catch (error) {
           console.error("Error fetching expenses for budget variance:", error);
-          // Use fallback data
-          expenses = [
-            { amount: 45000, budget_categories: { name: "Program Expenses" } },
-            { amount: 28000, budget_categories: { name: "Administrative" } },
-            { amount: 75000, budget_categories: { name: "Personnel" } },
-          ];
+          expenses = [];
         }
 
         const budgetsByCategory = new Map();
@@ -925,36 +931,85 @@ export default function ReportGeneration({
           );
         });
 
+        // Enhanced budget variance report with better data handling
+        const totalBudgeted = Array.from(budgetsByCategory.values()).reduce(
+          (sum, amount) => sum + amount,
+          0,
+        );
+        const totalActual = Array.from(expensesByCategory.values()).reduce(
+          (sum, amount) => sum + amount,
+          0,
+        );
+        const overallVariance = totalActual - totalBudgeted;
+        const overallVariancePercent =
+          totalBudgeted > 0
+            ? ((overallVariance / totalBudgeted) * 100).toFixed(1)
+            : "0";
+
         reportData = `
+          <div class="summary-card">
+            <h3>Budget Variance Analysis Report</h3>
+            <p><strong>Total Budgeted Amount:</strong> FRw ${totalBudgeted.toLocaleString()}</p>
+            <p><strong>Total Actual Expenses:</strong> FRw ${totalActual.toLocaleString()}</p>
+            <p><strong>Overall Variance:</strong> FRw ${overallVariance.toLocaleString()} (${overallVariancePercent}%)</p>
+            <p><strong>Budget Categories Analyzed:</strong> ${budgetsByCategory.size}</p>
+            <p><strong>Expense Records Included:</strong> ${expenses.length}</p>
+            <p><strong>Report Period:</strong> ${report.parameters?.dateFrom || "All time"} to ${report.parameters?.dateTo || "Present"}</p>
+          </div>
+          
           <table class="data-table">
             <thead>
-              <tr><th>Category</th><th>Planned</th><th>Actual</th><th>Variance</th><th>Variance %</th></tr>
+              <tr><th>Category</th><th>Planned (FRw)</th><th>Actual (FRw)</th><th>Variance (FRw)</th><th>Variance %</th><th>Status</th></tr>
             </thead>
             <tbody>
               ${
-                Array.from(budgetsByCategory.entries())
-                  .map(([category, planned]) => {
-                    const actual = expensesByCategory.get(category) || 0;
-                    const variance = actual - planned;
-                    const variancePercent =
-                      planned > 0
-                        ? ((variance / planned) * 100).toFixed(1)
-                        : "0";
-                    return `
-                  <tr>
-                    <td>${category}</td>
-                    <td>${planned.toLocaleString()}</td>
-                    <td>${actual.toLocaleString()}</td>
-                    <td>${variance.toLocaleString()}</td>
-                    <td>${variancePercent}%</td>
-                  </tr>
-                `;
-                  })
-                  .join("") ||
-                '<tr><td colspan="5">No budget data available</td></tr>'
+                budgetsByCategory.size > 0
+                  ? Array.from(budgetsByCategory.entries())
+                      .map(([category, planned]) => {
+                        const actual = expensesByCategory.get(category) || 0;
+                        const variance = actual - planned;
+                        const variancePercent =
+                          planned > 0
+                            ? ((variance / planned) * 100).toFixed(1)
+                            : "0";
+                        const status =
+                          variance > 0
+                            ? "Over Budget"
+                            : variance < 0
+                              ? "Under Budget"
+                              : "On Budget";
+                        const statusColor =
+                          variance > 0
+                            ? "#fee2e2"
+                            : variance < 0
+                              ? "#dcfce7"
+                              : "#dbeafe";
+                        return `
+                      <tr>
+                        <td>${category}</td>
+                        <td>${planned.toLocaleString()}</td>
+                        <td>${actual.toLocaleString()}</td>
+                        <td style="color: ${variance > 0 ? "#dc2626" : variance < 0 ? "#16a34a" : "#000"}">${variance.toLocaleString()}</td>
+                        <td style="color: ${variance > 0 ? "#dc2626" : variance < 0 ? "#16a34a" : "#000"}">${variancePercent}%</td>
+                        <td><span style="background: ${statusColor}; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${status}</span></td>
+                      </tr>
+                    `;
+                      })
+                      .join("")
+                  : '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">No budget variance data available. Please ensure budgets and expenses are properly categorized.</td></tr>'
               }
             </tbody>
           </table>
+          
+          <div class="summary-card">
+            <h4>Budget Performance Summary</h4>
+            <ul>
+              <li><strong>Categories Over Budget:</strong> ${Array.from(budgetsByCategory.entries()).filter(([cat, planned]) => (expensesByCategory.get(cat) || 0) > planned).length}</li>
+              <li><strong>Categories Under Budget:</strong> ${Array.from(budgetsByCategory.entries()).filter(([cat, planned]) => (expensesByCategory.get(cat) || 0) < planned).length}</li>
+              <li><strong>Categories On Budget:</strong> ${Array.from(budgetsByCategory.entries()).filter(([cat, planned]) => (expensesByCategory.get(cat) || 0) === planned).length}</li>
+              <li><strong>Budget Utilization Rate:</strong> ${totalBudgeted > 0 ? ((totalActual / totalBudgeted) * 100).toFixed(1) : "0"}%</li>
+            </ul>
+          </div>
         `;
       } else if (report.type === "donor_report") {
         // Enhanced donor report HTML generation

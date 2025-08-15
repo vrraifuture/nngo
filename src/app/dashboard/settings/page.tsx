@@ -357,6 +357,171 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
+                {/* Manual User Creation with PIN */}
+                <div className="bg-white p-4 rounded-lg border border-blue-200">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                      NEW
+                    </span>
+                    Manual User Creation with PIN
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Create users manually and assign them a PIN for immediate
+                    access without email verification.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="manualUserName"
+                        className="w-full p-2 border rounded-md"
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        Email *
+                      </label>
+                      <input
+                        type="email"
+                        id="manualUserEmail"
+                        className="w-full p-2 border rounded-md"
+                        placeholder="john@example.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        4-Digit PIN *
+                      </label>
+                      <input
+                        type="password"
+                        id="manualUserPin"
+                        className="w-full p-2 border rounded-md"
+                        placeholder="1234"
+                        maxLength={4}
+                        pattern="[0-9]{4}"
+                        onInput={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          target.value = target.value
+                            .replace(/[^0-9]/g, "")
+                            .slice(0, 4);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        Role *
+                      </label>
+                      <select
+                        id="manualUserRole"
+                        className="w-full p-2 border rounded-md"
+                        defaultValue=""
+                      >
+                        <option value="">Select role...</option>
+                        <option value="admin">Admin (Full Access)</option>
+                        <option value="accountant">
+                          Accountant (Add Only)
+                        </option>
+                        <option value="viewer">Viewer (Read Only)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        const nameInput = document.getElementById(
+                          "manualUserName",
+                        ) as HTMLInputElement;
+                        const emailInput = document.getElementById(
+                          "manualUserEmail",
+                        ) as HTMLInputElement;
+                        const pinInput = document.getElementById(
+                          "manualUserPin",
+                        ) as HTMLInputElement;
+                        const roleSelect = document.getElementById(
+                          "manualUserRole",
+                        ) as HTMLSelectElement;
+
+                        const name = nameInput?.value?.trim();
+                        const email = emailInput?.value?.trim();
+                        const pin = pinInput?.value?.trim();
+                        const role = roleSelect?.value;
+
+                        if (!name || !email || !pin || !role) {
+                          alert("Please fill in all fields.");
+                          return;
+                        }
+
+                        if (!email.includes("@")) {
+                          alert("Please enter a valid email address.");
+                          return;
+                        }
+
+                        if (pin.length !== 4 || !/^[0-9]{4}$/.test(pin)) {
+                          alert("PIN must be exactly 4 digits.");
+                          return;
+                        }
+
+                        try {
+                          // Store manual users in localStorage
+                          const existingUsers = JSON.parse(
+                            localStorage.getItem("ngo_manual_users") || "[]",
+                          );
+
+                          // Check if user already exists
+                          if (
+                            existingUsers.find(
+                              (user: any) => user.email === email,
+                            )
+                          ) {
+                            alert("User with this email already exists.");
+                            return;
+                          }
+
+                          const newUser = {
+                            id: Date.now().toString(),
+                            name: name,
+                            email: email,
+                            pin: pin, // In production, this should be hashed
+                            role: role,
+                            status: "active",
+                            created_at: new Date().toISOString(),
+                            created_by: userRole,
+                          };
+
+                          existingUsers.push(newUser);
+                          localStorage.setItem(
+                            "ngo_manual_users",
+                            JSON.stringify(existingUsers),
+                          );
+
+                          alert(
+                            `User ${name} created successfully!\n\nLogin Details:\nEmail: ${email}\nPIN: ${pin}\nRole: ${role}\n\nPlease share these credentials securely with the user.`,
+                          );
+
+                          // Clear form
+                          nameInput.value = "";
+                          emailInput.value = "";
+                          pinInput.value = "";
+                          roleSelect.value = "";
+
+                          // Refresh to show updated user list
+                          window.location.reload();
+                        } catch (error) {
+                          console.error("Error creating manual user:", error);
+                          alert("Error creating user. Please try again.");
+                        }
+                      }}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                    >
+                      Create User with PIN
+                    </button>
+                  </div>
+                </div>
+
                 {/* Current Users List */}
                 <div className="bg-white p-4 rounded-lg border">
                   <h4 className="font-semibold text-gray-900 mb-3">
@@ -431,6 +596,98 @@ function SettingsPageContent() {
                         return (
                           <p className="text-red-500 text-sm">
                             Error loading user invitations.
+                          </p>
+                        );
+                      }
+                    })()}
+                  </div>
+                </div>
+
+                {/* Manual Users List */}
+                <div className="bg-white p-4 rounded-lg border border-blue-200">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                      PIN
+                    </span>
+                    Manual Users (PIN Access)
+                  </h4>
+                  <div className="space-y-2">
+                    {(() => {
+                      try {
+                        const manualUsers = JSON.parse(
+                          localStorage.getItem("ngo_manual_users") || "[]",
+                        );
+                        if (manualUsers.length === 0) {
+                          return (
+                            <p className="text-gray-500 text-sm">
+                              No manual users created yet.
+                            </p>
+                          );
+                        }
+                        return manualUsers.map((user: any) => (
+                          <div
+                            key={user.id}
+                            className="flex items-center justify-between p-3 bg-blue-50 rounded border border-blue-200"
+                          >
+                            <div>
+                              <div className="font-medium text-sm">
+                                {user.name} ({user.email})
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                Role: {user.role} | PIN: ••••
+                                {user.pin.slice(-2)} | Status: {user.status} |
+                                Created:{" "}
+                                {new Date(user.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  alert(
+                                    `User Login Details:\n\nName: ${user.name}\nEmail: ${user.email}\nPIN: ${user.pin}\nRole: ${user.role}\n\nPlease share these credentials securely.`,
+                                  );
+                                }}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                              >
+                                View PIN
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `Remove user ${user.name} (${user.email})?`,
+                                    )
+                                  ) {
+                                    try {
+                                      const existingUsers = JSON.parse(
+                                        localStorage.getItem(
+                                          "ngo_manual_users",
+                                        ) || "[]",
+                                      );
+                                      const updatedUsers = existingUsers.filter(
+                                        (u: any) => u.id !== user.id,
+                                      );
+                                      localStorage.setItem(
+                                        "ngo_manual_users",
+                                        JSON.stringify(updatedUsers),
+                                      );
+                                      window.location.reload();
+                                    } catch (error) {
+                                      alert("Error removing user.");
+                                    }
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ));
+                      } catch (error) {
+                        return (
+                          <p className="text-red-500 text-sm">
+                            Error loading manual users.
                           </p>
                         );
                       }
