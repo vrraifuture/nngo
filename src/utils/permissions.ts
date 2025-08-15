@@ -1237,6 +1237,115 @@ export const getPermissionStatus = (permissionId: string): any => {
   };
 };
 
+// Function to authenticate manual users with PIN
+export const authenticateManualUser = async (
+  email: string,
+  pin: string,
+): Promise<{ success: boolean; user?: any; error?: string }> => {
+  if (typeof window === "undefined") {
+    return {
+      success: false,
+      error: "Server-side authentication not supported",
+    };
+  }
+
+  try {
+    console.log(`Attempting PIN authentication for: ${email}`);
+
+    // Get manual users from localStorage
+    const manualUsers = JSON.parse(
+      localStorage.getItem("ngo_manual_users") || "[]",
+    );
+
+    // Find user by email
+    const user = manualUsers.find(
+      (u: any) => u.email.toLowerCase() === email.toLowerCase(),
+    );
+
+    if (!user) {
+      console.log(`No manual user found with email: ${email}`);
+      return { success: false, error: "User not found" };
+    }
+
+    // Check PIN
+    if (user.pin !== pin) {
+      console.log(`Invalid PIN for user: ${email}`);
+      return { success: false, error: "Invalid PIN" };
+    }
+
+    // Check if user is active
+    if (user.status !== "active") {
+      console.log(`User account is not active: ${email}`);
+      return { success: false, error: "Account not active" };
+    }
+
+    console.log(`PIN authentication successful for: ${email}`);
+
+    // Set user role and permissions in localStorage/sessionStorage
+    sessionStorage.setItem("temp_user_role", user.role);
+    localStorage.setItem("ngo_current_user_role", user.role);
+    localStorage.setItem("ngo_current_user_email", user.email);
+    localStorage.setItem("ngo_manual_user_authenticated", "true");
+    localStorage.setItem(
+      "ngo_manual_user_data",
+      JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      }),
+    );
+
+    // Set admin verification if user is admin
+    if (user.role === "admin") {
+      sessionStorage.setItem("admin_verified", "true");
+      localStorage.setItem("admin_verified", "true");
+    }
+
+    // Clear permissions cache to force refresh
+    permissionsCache = [];
+    cacheTimestamp = 0;
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
+  } catch (error) {
+    console.error("Error authenticating manual user:", error);
+    return { success: false, error: "Authentication failed" };
+  }
+};
+
+// Function to check if current session is a manual user
+export const isManualUserSession = (): boolean => {
+  if (typeof window === "undefined") return false;
+
+  try {
+    return localStorage.getItem("ngo_manual_user_authenticated") === "true";
+  } catch (error) {
+    console.error("Error checking manual user session:", error);
+    return false;
+  }
+};
+
+// Function to get manual user data from session
+export const getManualUserData = (): any | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const userData = localStorage.getItem("ngo_manual_user_data");
+    return userData ? JSON.parse(userData) : null;
+  } catch (error) {
+    console.error("Error getting manual user data:", error);
+    return null;
+  }
+};
+
 // Function to manually verify and fix admin user roles
 export const verifyAndFixAdminRole = async (
   userEmail?: string,

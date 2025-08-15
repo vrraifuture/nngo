@@ -361,14 +361,22 @@ function SettingsPageContent() {
                 <div className="bg-white p-4 rounded-lg border border-blue-200">
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                      NEW
+                      PIN LOGIN
                     </span>
                     Manual User Creation with PIN
                   </h4>
                   <p className="text-sm text-gray-600 mb-4">
-                    Create users manually and assign them a PIN for immediate
-                    access without email verification.
+                    Create users manually and assign them a 4-digit PIN for
+                    immediate access. Users can login with their email and PIN
+                    instead of a password.
                   </p>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Important:</strong> Users created with PIN can
+                      login using their email and 4-digit PIN on the sign-in
+                      page. They should enter their PIN in the password field.
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
@@ -499,7 +507,7 @@ function SettingsPageContent() {
                           );
 
                           alert(
-                            `User ${name} created successfully!\n\nLogin Details:\nEmail: ${email}\nPIN: ${pin}\nRole: ${role}\n\nPlease share these credentials securely with the user.`,
+                            `User ${name} created successfully!\n\nLogin Instructions:\n• Email: ${email}\n• PIN: ${pin}\n• Role: ${role}\n\nTo login: Use email and enter PIN in the password field on the sign-in page.\n\nPlease share these credentials securely with the user.`,
                           );
 
                           // Clear form
@@ -644,7 +652,7 @@ function SettingsPageContent() {
                               <button
                                 onClick={() => {
                                   alert(
-                                    `User Login Details:\n\nName: ${user.name}\nEmail: ${user.email}\nPIN: ${user.pin}\nRole: ${user.role}\n\nPlease share these credentials securely.`,
+                                    `User Login Details:\n\nName: ${user.name}\nEmail: ${user.email}\nPIN: ${user.pin}\nRole: ${user.role}\n\nLogin Instructions:\nUse email and enter PIN in the password field on the sign-in page.\n\nPlease share these credentials securely.`,
                                   );
                                 }}
                                 className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
