@@ -1,536 +1,674 @@
-import DashboardNavbar from "@/components/dashboard-navbar";
-import FundTrackingPanel from "@/components/fund-tracking-panel";
-import BudgetComparisonChart from "@/components/budget-comparison-chart";
-import ExpenseManagement from "@/components/expense-management";
-import ReportGeneration from "@/components/report-generation";
-import GeneralLedger from "@/components/general-ledger";
-import DashboardCurrencyUpdater from "@/components/dashboard-currency-updater";
-import DashboardCurrencyDisplay from "@/components/dashboard-currency-display";
-import PermissionInitializer from "@/components/permission-initializer";
-import FinancialIntegrationHelper from "@/components/financial-integration-helper";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DollarSign,
-  TrendingUp,
-  FileText,
-  Users,
-  AlertCircle,
-} from "lucide-react";
-import { redirect } from "next/navigation";
-import { createClient } from "../../../supabase/server";
-import { formatCurrencyCompact } from "@/utils/currency";
+"use client";
 
-// Helper function to get default currency (server-side compatible)
-function getDefaultCurrencySymbol() {
-  // Since we can't access localStorage on server-side, we'll use RWF as default
-  // The client-side components will handle the actual currency from localStorage
-  return "FRw";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  FileText,
+  Download,
+  Calendar,
+  TrendingUp,
+  DollarSign,
+  Users,
+  BarChart3,
+  PieChart,
+} from "lucide-react";
+import { createClient } from "../../supabase/client";
+
+interface ReportGenerationProps {
+  userRole: string;
 }
 
-export default async function Dashboard() {
-  const supabase = await createClient();
+interface Report {
+  id: string;
+  title: string;
+  type: string;
+  generated_at: string;
+  status: string;
+  size: string;
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+interface ExpenseData {
+  id: string;
+  description: string;
+  amount: number;
+  expense_date: string;
+  status: string;
+  budget_categories?: {
+    name: string;
+  };
+}
 
-  if (!user) {
-    return redirect("/sign-in");
-  }
+interface FundData {
+  id: string;
+  donor_name: string;
+  amount: number;
+  received_date: string;
+  status: string;
+}
 
-  // Define super admin users - these users should always have admin access
-  const SUPER_ADMIN_EMAILS = [
-    "abdousentore@gmail.com",
-    // Add more super admin emails here as needed
+interface BudgetData {
+  id: string;
+  category_name: string;
+  allocated_amount: number;
+  spent_amount: number;
+  period_start: string;
+  period_end: string;
+}
+
+export default function ReportGeneration({ userRole }: ReportGenerationProps) {
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedReportType, setSelectedReportType] =
+    useState<string>("financial_summary");
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("current_month");
+
+  const supabase = createClient();
+
+  const reportTypes = [
+    {
+      value: "financial_summary",
+      label: "Financial Summary",
+      icon: DollarSign,
+    },
+    { value: "expense_report", label: "Expense Report", icon: TrendingUp },
+    { value: "budget_variance", label: "Budget Variance", icon: BarChart3 },
+    { value: "donor_report", label: "Donor Report", icon: Users },
+    { value: "project_funding", label: "Project Funding", icon: PieChart },
   ];
 
-  // Check if user is a super admin
-  const isSuperAdmin =
-    user.email && SUPER_ADMIN_EMAILS.includes(user.email.toLowerCase());
+  const periods = [
+    { value: "current_month", label: "Current Month" },
+    { value: "last_month", label: "Last Month" },
+    { value: "current_quarter", label: "Current Quarter" },
+    { value: "last_quarter", label: "Last Quarter" },
+    { value: "current_year", label: "Current Year" },
+    { value: "custom", label: "Custom Range" },
+  ];
 
-  // Get user role from database with super admin handling
-  let role = "viewer"; // Default fallback
+  useEffect(() => {
+    loadReports();
+  }, []);
 
-  try {
-    // Get organization ID first
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("id")
-      .limit(1)
-      .single();
-
-    if (org) {
-      // If user is super admin, ensure they have admin role
-      if (isSuperAdmin) {
-        console.log(
-          `Super admin detected: ${user.email} - ensuring admin role`,
-        );
-
-        // Delete any existing roles for this user
-        await supabase
-          .from("user_roles")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("organization_id", org.id);
-
-        // Insert admin role
-        const { error: createAdminError } = await supabase
-          .from("user_roles")
-          .insert({
-            user_id: user.id,
-            organization_id: org.id,
-            role: "admin",
-          });
-
-        if (!createAdminError) {
-          role = "admin";
-          console.log(`Super admin role ensured for ${user.email}`);
-        } else {
-          console.error(
-            "Failed to create admin role for super admin:",
-            createAdminError,
-          );
-          role = "admin"; // Still treat as admin even if DB insert fails
-        }
-      } else {
-        // For non-super admin users, get their role from database
-        const { data: userRoles, error: roleError } = await supabase
-          .from("user_roles")
-          .select("id, role, created_at")
-          .eq("user_id", user.id)
-          .eq("organization_id", org.id)
-          .order("created_at", { ascending: false });
-
-        if (!roleError && userRoles && userRoles.length > 0) {
-          // If there are multiple roles (duplicates), clean them up
-          if (userRoles.length > 1) {
-            console.warn(
-              `Found ${userRoles.length} duplicate roles for user, cleaning up...`,
-            );
-
-            // Keep the most recent role
-            const mostRecentRole = userRoles[0];
-            const duplicateIds = userRoles.slice(1).map((r) => r.id);
-
-            // Delete duplicate entries
-            if (duplicateIds.length > 0) {
-              const { error: deleteError } = await supabase
-                .from("user_roles")
-                .delete()
-                .in("id", duplicateIds);
-
-              if (deleteError) {
-                console.error(
-                  "Error cleaning up duplicate roles:",
-                  deleteError,
-                );
-              } else {
-                console.log(
-                  `Cleaned up ${duplicateIds.length} duplicate role entries`,
-                );
-              }
-            }
-
-            role = mostRecentRole.role || "viewer";
-          } else {
-            role = userRoles[0].role || "viewer";
-          }
-
-          console.log(`Found existing role for user ${user.email}:`, role);
-        } else {
-          // No role found, create a default viewer role
-          console.log(
-            `No role found for user ${user.email}, creating viewer role`,
-          );
-
-          const { error: createRoleError } = await supabase
-            .from("user_roles")
-            .insert({
-              user_id: user.id,
-              organization_id: org.id,
-              role: "viewer",
-            });
-
-          if (!createRoleError) {
-            role = "viewer";
-            console.log("Created viewer role for new user");
-          } else {
-            console.error("Failed to create role for user:", createRoleError);
-            role = "viewer"; // Fallback
-          }
-        }
+  const loadReports = async () => {
+    try {
+      // Try to load from localStorage first (for client-side generated reports)
+      const savedReports = localStorage.getItem("generated_reports");
+      if (savedReports) {
+        const parsedReports = JSON.parse(savedReports);
+        setReports(parsedReports);
       }
-    } else {
-      console.warn("No organization found, using fallback role");
-      role = isSuperAdmin ? "admin" : "viewer"; // Super admins get admin even without org
+
+      // Also try to fetch from database
+      const { data, error } = await supabase
+        .from("reports")
+        .select("*")
+        .order("generated_at", { ascending: false })
+        .limit(10);
+
+      if (!error && data) {
+        const dbReports = data.map((report: any) => ({
+          id: report.id,
+          title: report.title,
+          type: report.type,
+          generated_at: report.generated_at,
+          status: report.status || "completed",
+          size: report.size || "N/A",
+        }));
+
+        // Merge with localStorage reports, avoiding duplicates
+        const allReports = [...dbReports];
+        if (savedReports) {
+          const localReports = JSON.parse(savedReports);
+          localReports.forEach((localReport: Report) => {
+            if (!allReports.some((r) => r.id === localReport.id)) {
+              allReports.push(localReport);
+            }
+          });
+        }
+
+        setReports(allReports);
+      }
+    } catch (error) {
+      console.error("Error loading reports:", error);
     }
-  } catch (error) {
-    console.error("Error handling user role:", error);
-    role = isSuperAdmin ? "admin" : "viewer"; // Safe fallback with super admin check
-  }
+  };
 
-  console.log(`Dashboard loaded for user ${user.email} with role: ${role}`);
+  const getDateRange = (period: string) => {
+    const now = new Date();
+    let startDate: Date, endDate: Date;
 
-  // Get dashboard statistics
-  const { data: totalFunds } = await supabase
-    .from("fund_sources")
-    .select("amount")
-    .in("status", ["received", "partially_used"]);
+    switch (period) {
+      case "current_month":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case "last_month":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+        break;
+      case "current_quarter":
+        const currentQuarter = Math.floor(now.getMonth() / 3);
+        startDate = new Date(now.getFullYear(), currentQuarter * 3, 1);
+        endDate = new Date(now.getFullYear(), (currentQuarter + 1) * 3, 0);
+        break;
+      case "last_quarter":
+        const lastQuarter = Math.floor(now.getMonth() / 3) - 1;
+        const quarterYear =
+          lastQuarter < 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const adjustedQuarter = lastQuarter < 0 ? 3 : lastQuarter;
+        startDate = new Date(quarterYear, adjustedQuarter * 3, 1);
+        endDate = new Date(quarterYear, (adjustedQuarter + 1) * 3, 0);
+        break;
+      case "current_year":
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now.getFullYear(), 11, 31);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    }
 
-  const { data: activeProjects } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("status", "active");
+    return { startDate, endDate };
+  };
 
-  // Get monthly expense data - real data only
-  let monthlyExpensesAmount = 0;
-  let approvedExpensesAmount = 0;
-  let paidExpensesAmount = 0;
-  let rejectedExpensesAmount = 0;
+  const generateReport = async () => {
+    if (!selectedReportType || !selectedPeriod) {
+      alert("Please select both report type and period");
+      return;
+    }
 
-  try {
-    const currentDate = new Date();
-    const firstDayOfMonth = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      1,
-    );
-    const lastDayOfMonth = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      0,
-    );
-
-    // Get monthly expenses with proper date filtering
-    const { data: monthlyExpenses, error: monthlyError } = await supabase
-      .from("expenses")
-      .select("amount")
-      .gte("expense_date", firstDayOfMonth.toISOString().split("T")[0])
-      .lte("expense_date", lastDayOfMonth.toISOString().split("T")[0]);
-
-    if (!monthlyError && monthlyExpenses) {
-      monthlyExpensesAmount = monthlyExpenses.reduce(
-        (sum, expense) => sum + (expense.amount || 0),
-        0,
+    setLoading(true);
+    try {
+      const { startDate, endDate } = getDateRange(selectedPeriod);
+      const reportData = await fetchReportData(
+        selectedReportType,
+        startDate,
+        endDate,
       );
-    }
-
-    // Get all expenses for status calculations
-    const { data: allExpenses, error: expenseError } = await supabase
-      .from("expenses")
-      .select("amount, status");
-
-    if (!expenseError && allExpenses) {
-      approvedExpensesAmount = allExpenses
-        .filter((e) => e.status === "approved")
-        .reduce((sum, expense) => sum + (expense.amount || 0), 0);
-
-      paidExpensesAmount = allExpenses
-        .filter((e) => e.status === "paid")
-        .reduce((sum, expense) => sum + (expense.amount || 0), 0);
-
-      rejectedExpensesAmount = allExpenses
-        .filter((e) => e.status === "rejected")
-        .reduce((sum, expense) => sum + (expense.amount || 0), 0);
-    }
-  } catch (error) {
-    console.error("Error fetching expenses:", error);
-    // Keep values at 0 - no fallback mock data
-  }
-
-  // Get reports data - count actual reports generated this month
-  let reportsThisMonth = 0;
-  try {
-    const currentDate = new Date();
-    const firstDayOfMonth = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      1,
-    );
-    const lastDayOfMonth = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      0,
-    );
-
-    console.log("Calculating reports for period:", {
-      start: firstDayOfMonth.toISOString(),
-      end: lastDayOfMonth.toISOString(),
-    });
-
-    // First try to get actual reports from the reports table
-    const { data: actualReports, error: reportsError } = await supabase
-      .from("reports")
-      .select("id, generated_at")
-      .gte("generated_at", firstDayOfMonth.toISOString())
-      .lte("generated_at", lastDayOfMonth.toISOString());
-
-    if (!reportsError && actualReports && actualReports.length > 0) {
-      reportsThisMonth = actualReports.length;
-      console.log("Found actual reports from database:", reportsThisMonth);
-    } else {
-      console.log(
-        "Reports table not accessible or no reports found, checking recent activity...",
+      const htmlContent = generateReportHTML(
+        selectedReportType,
+        reportData,
+        startDate,
+        endDate,
       );
 
-      // Count recent financial activities that would generate reports
+      // Create new report
+      const newReport: Report = {
+        id: `report_${Date.now()}`,
+        title: `${reportTypes.find((t) => t.value === selectedReportType)?.label} - ${periods.find((p) => p.value === selectedPeriod)?.label}`,
+        type: selectedReportType,
+        generated_at: new Date().toISOString(),
+        status: "completed",
+        size: `${Math.round(htmlContent.length / 1024)}KB`,
+      };
+
+      // Save to localStorage
+      const existingReports = JSON.parse(
+        localStorage.getItem("generated_reports") || "[]",
+      );
+      const updatedReports = [newReport, ...existingReports].slice(0, 20); // Keep only latest 20
+      localStorage.setItem("generated_reports", JSON.stringify(updatedReports));
+
+      // Try to save to database
       try {
-        const [recentExpenses, recentBudgets, recentFunds] = await Promise.all([
+        await supabase.from("reports").insert({
+          id: newReport.id,
+          title: newReport.title,
+          type: newReport.type,
+          generated_at: newReport.generated_at,
+          status: newReport.status,
+          size: newReport.size,
+        });
+      } catch (dbError) {
+        console.log("Database save failed, using localStorage only");
+      }
+
+      // Update local state
+      setReports((prev) => [newReport, ...prev]);
+
+      // Download the report
+      downloadReport(newReport.title, htmlContent);
+    } catch (error) {
+      console.error("Error generating report:", error);
+      alert("Error generating report. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchReportData = async (
+    reportType: string,
+    startDate: Date,
+    endDate: Date,
+  ) => {
+    const startDateStr = startDate.toISOString().split("T")[0];
+    const endDateStr = endDate.toISOString().split("T")[0];
+
+    switch (reportType) {
+      case "expense_report":
+        const { data: expenses } = await supabase
+          .from("expenses")
+          .select(
+            `
+            *,
+            budget_categories (
+              name
+            )
+          `,
+          )
+          .gte("expense_date", startDateStr)
+          .lte("expense_date", endDateStr)
+          .order("expense_date", { ascending: false });
+        return { expenses: expenses || [] };
+
+      case "donor_report":
+        const { data: funds } = await supabase
+          .from("fund_sources")
+          .select("*")
+          .gte("received_date", startDateStr)
+          .lte("received_date", endDateStr)
+          .order("received_date", { ascending: false });
+        return { funds: funds || [] };
+
+      case "budget_variance":
+        const { data: budgets } = await supabase
+          .from("budgets")
+          .select("*")
+          .gte("period_start", startDateStr)
+          .lte("period_end", endDateStr);
+        return { budgets: budgets || [] };
+
+      default:
+        // Financial summary - get all data
+        const [expensesRes, fundsRes, budgetsRes] = await Promise.all([
           supabase
             .from("expenses")
-            .select("id")
-            .gte("created_at", firstDayOfMonth.toISOString())
-            .lte("created_at", lastDayOfMonth.toISOString()),
-
-          supabase
-            .from("budgets")
-            .select("id")
-            .gte("created_at", firstDayOfMonth.toISOString())
-            .lte("created_at", lastDayOfMonth.toISOString()),
-
+            .select("*")
+            .gte("expense_date", startDateStr)
+            .lte("expense_date", endDateStr),
           supabase
             .from("fund_sources")
-            .select("id")
-            .gte("created_at", firstDayOfMonth.toISOString())
-            .lte("created_at", lastDayOfMonth.toISOString()),
+            .select("*")
+            .gte("received_date", startDateStr)
+            .lte("received_date", endDateStr),
+          supabase.from("budgets").select("*"),
         ]);
 
-        // Calculate realistic report count based on this month's activity
-        const expensesThisMonth = recentExpenses.data?.length || 0;
-        const budgetsThisMonth = recentBudgets.data?.length || 0;
-        const fundsThisMonth = recentFunds.data?.length || 0;
-        const totalActivity =
-          expensesThisMonth + budgetsThisMonth + fundsThisMonth;
-
-        console.log("Activity this month:", {
-          expensesThisMonth,
-          budgetsThisMonth,
-          fundsThisMonth,
-          totalActivity,
-        });
-
-        // Estimate reports that would be generated based on activity
-        let estimatedReports = 0;
-
-        // Base monthly reports if there's any activity
-        if (totalActivity > 0) {
-          estimatedReports += 3; // Financial summary + monthly overview + activity report
-        }
-
-        // Activity-specific reports
-        if (expensesThisMonth >= 3) estimatedReports += 2; // Expense analysis + detailed breakdown
-        if (budgetsThisMonth >= 1) estimatedReports += 1; // Budget variance report
-        if (fundsThisMonth >= 1) estimatedReports += 2; // Donor impact report + fund utilization
-
-        // Additional reports based on volume
-        if (expensesThisMonth >= 8) estimatedReports += 1; // Comprehensive expense report
-        if (budgetsThisMonth >= 3) estimatedReports += 1; // Budget performance report
-        if (totalActivity >= 15) estimatedReports += 2; // Comprehensive reports
-
-        // If no database activity but we know reports have been generated (from localStorage)
-        // we should show at least some reports
-        if (estimatedReports === 0) {
-          // Check if there might be localStorage reports by looking at any data at all
-          const { data: anyExpenses } = await supabase
-            .from("expenses")
-            .select("id")
-            .limit(1);
-          const { data: anyBudgets } = await supabase
-            .from("budgets")
-            .select("id")
-            .limit(1);
-          const { data: anyFunds } = await supabase
-            .from("fund_sources")
-            .select("id")
-            .limit(1);
-
-          // If there's any data in the system, assume some reports have been generated
-          if (anyExpenses?.length || anyBudgets?.length || anyFunds?.length) {
-            estimatedReports = 5; // Reasonable baseline for active system
-          }
-        }
-
-        reportsThisMonth = Math.min(estimatedReports, 20); // Cap at 20 reports per month
-
-        console.log("Final estimated reports:", reportsThisMonth);
-      } catch (activityError) {
-        console.error(
-          "Error calculating activity-based reports:",
-          activityError,
-        );
-        // Fallback: assume moderate activity for an active NGO
-        reportsThisMonth = 7;
-      }
+        return {
+          expenses: expensesRes.data || [],
+          funds: fundsRes.data || [],
+          budgets: budgetsRes.data || [],
+        };
     }
-  } catch (error) {
-    console.error("Error fetching reports:", error);
-    // Final fallback: reasonable estimate for an active NGO
-    reportsThisMonth = 8; // Reasonable default for an active organization
-  }
+  };
 
-  const totalFundsAmount =
-    totalFunds?.reduce((sum, fund) => sum + (fund.amount || 0), 0) || 0;
-  const activeProjectsCount = activeProjects?.length || 0;
+  const generateReportHTML = (
+    reportType: string,
+    data: any,
+    startDate: Date,
+    endDate: Date,
+  ): string => {
+    const formatDate = (date: Date) => date.toLocaleDateString();
+    const formatCurrency = (amount: number) => `FRw ${amount.toLocaleString()}`;
+
+    const baseHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${reportTypes.find((t) => t.value === reportType)?.label}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #4CAF50; padding-bottom: 20px; }
+          .period { color: #666; margin: 10px 0; }
+          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f8f9fa; font-weight: bold; }
+          .summary { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+          .amount { font-weight: bold; color: #2563eb; }
+          .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+          .status.approved { background-color: #dcfce7; color: #166534; }
+          .status.pending { background-color: #fef3c7; color: #92400e; }
+          .status.rejected { background-color: #fecaca; color: #991b1b; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${reportTypes.find((t) => t.value === reportType)?.label}</h1>
+          <p class="period">Period: ${formatDate(startDate)} to ${formatDate(endDate)}</p>
+          <p>Generated on: ${new Date().toLocaleString()}</p>
+        </div>
+    `;
+
+    let content = "";
+
+    switch (reportType) {
+      case "expense_report":
+        const totalExpenses = data.expenses.reduce(
+          (sum: number, exp: ExpenseData) => sum + exp.amount,
+          0,
+        );
+        content = `
+          <div class="summary">
+            <h3>Summary</h3>
+            <p>Total Expenses: <span class="amount">${formatCurrency(totalExpenses)}</span></p>
+            <p>Number of Transactions: ${data.expenses.length}</p>
+          </div>
+          <h3>Expense Details</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.expenses
+                .map(
+                  (expense: ExpenseData) => `
+                <tr>
+                  <td>${new Date(expense.expense_date).toLocaleDateString()}</td>
+                  <td>${expense.description}</td>
+                  <td>${expense.budget_categories?.name || "Uncategorized"}</td>
+                  <td class="amount">${formatCurrency(expense.amount)}</td>
+                  <td><span class="status ${expense.status}">${expense.status}</span></td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+        break;
+
+      case "donor_report":
+        const totalFunds = data.funds.reduce(
+          (sum: number, fund: FundData) => sum + fund.amount,
+          0,
+        );
+        content = `
+          <div class="summary">
+            <h3>Summary</h3>
+            <p>Total Funds Received: <span class="amount">${formatCurrency(totalFunds)}</span></p>
+            <p>Number of Donors: ${new Set(data.funds.map((f: FundData) => f.donor_name)).size}</p>
+          </div>
+          <h3>Fund Details</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Date Received</th>
+                <th>Donor</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.funds
+                .map(
+                  (fund: FundData) => `
+                <tr>
+                  <td>${new Date(fund.received_date).toLocaleDateString()}</td>
+                  <td>${fund.donor_name}</td>
+                  <td class="amount">${formatCurrency(fund.amount)}</td>
+                  <td><span class="status ${fund.status}">${fund.status}</span></td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+        break;
+
+      default:
+        // Financial summary
+        const totalExpenseAmount =
+          data.expenses?.reduce(
+            (sum: number, exp: ExpenseData) => sum + exp.amount,
+            0,
+          ) || 0;
+        const totalFundAmount =
+          data.funds?.reduce(
+            (sum: number, fund: FundData) => sum + fund.amount,
+            0,
+          ) || 0;
+        const remainingFunds = totalFundAmount - totalExpenseAmount;
+
+        content = `
+          <div class="summary">
+            <h3>Financial Summary</h3>
+            <p>Total Funds Received: <span class="amount">${formatCurrency(totalFundAmount)}</span></p>
+            <p>Total Expenses: <span class="amount">${formatCurrency(totalExpenseAmount)}</span></p>
+            <p>Remaining Funds: <span class="amount">${formatCurrency(remainingFunds)}</span></p>
+          </div>
+          
+          <h3>Recent Transactions</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                data.expenses
+                  ?.slice(0, 10)
+                  .map(
+                    (expense: ExpenseData) => `
+                <tr>
+                  <td>${new Date(expense.expense_date).toLocaleDateString()}</td>
+                  <td>Expense</td>
+                  <td>${expense.description}</td>
+                  <td class="amount">-${formatCurrency(expense.amount)}</td>
+                </tr>
+              `,
+                  )
+                  .join("") || ""
+              }
+              ${
+                data.funds
+                  ?.slice(0, 5)
+                  .map(
+                    (fund: FundData) => `
+                <tr>
+                  <td>${new Date(fund.received_date).toLocaleDateString()}</td>
+                  <td>Fund</td>
+                  <td>From ${fund.donor_name}</td>
+                  <td class="amount">+${formatCurrency(fund.amount)}</td>
+                </tr>
+              `,
+                  )
+                  .join("") || ""
+              }
+            </tbody>
+          </table>
+        `;
+    }
+
+    return (
+      baseHTML +
+      content +
+      `
+        </body>
+      </html>
+    `
+    );
+  };
+
+  const downloadReport = (title: string, htmlContent: string) => {
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = async (reportId: string) => {
+    const report = reports.find((r) => r.id === reportId);
+    if (!report) return;
+
+    // For existing reports, regenerate the content
+    const { startDate, endDate } = getDateRange(selectedPeriod);
+    const reportData = await fetchReportData(report.type, startDate, endDate);
+    const htmlContent = generateReportHTML(
+      report.type,
+      reportData,
+      startDate,
+      endDate,
+    );
+
+    downloadReport(report.title, htmlContent);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <DashboardCurrencyUpdater />
-      <DashboardCurrencyDisplay />
-      <PermissionInitializer userRole={role} />
-      <FinancialIntegrationHelper />
-      <DashboardNavbar />
-      <main className="w-full">
-        <div className="container mx-auto px-4 py-8 flex flex-col gap-8">
-          {/* Header Section */}
-          <header className="flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  NGO Fund Management Dashboard
-                </h1>
-                <p className="text-gray-600 mt-1">Welcome back, {user.email}</p>
-              </div>
-              <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium capitalize">
-                {role} Access
-              </div>
+    <div className="space-y-6">
+      {/* Report Generation Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" />
+            Generate New Report
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Report Type
+              </label>
+              <Select
+                value={selectedReportType}
+                onValueChange={setSelectedReportType}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select report type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reportTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      <div className="flex items-center gap-2">
+                        <type.icon className="w-4 h-4" />
+                        {type.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </header>
 
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-white">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Total Funds
-                </CardTitle>
-                <DollarSign className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="text-2xl font-bold text-gray-900 currency-amount"
-                  data-amount={totalFundsAmount}
-                >
-                  FRw{totalFundsAmount.toLocaleString()}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Available for allocation
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Active Projects
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-gray-900">
-                  {activeProjectsCount}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Currently running</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Monthly Expenses
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-orange-600" />
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="text-2xl font-bold text-gray-900 currency-amount"
-                  data-amount={monthlyExpensesAmount}
-                >
-                  FRw{monthlyExpensesAmount.toLocaleString()}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">This month's total</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Reports Generated
-                </CardTitle>
-                <FileText className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-gray-900">
-                  {reportsThisMonth}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">This month</p>
-              </CardContent>
-            </Card>
+            <div>
+              <label className="block text-sm font-medium mb-2">Period</label>
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periods.map((period) => (
+                    <SelectItem key={period.value} value={period.value}>
+                      {period.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* Main Dashboard Tabs */}
-          <Tabs defaultValue="funds" className="w-full">
-            <TabsList className="w-full bg-white overflow-x-auto flex md:grid md:grid-cols-5 gap-1 p-1">
-              <TabsTrigger
-                value="funds"
-                className="flex-shrink-0 whitespace-nowrap data-[state=active]:bg-green-100 data-[state=active]:text-green-800 text-xs sm:text-sm px-2 sm:px-4 py-2"
-              >
-                Fund Tracking
-              </TabsTrigger>
-              <TabsTrigger
-                value="budget"
-                className="flex-shrink-0 whitespace-nowrap data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 text-xs sm:text-sm px-2 sm:px-4 py-2"
-              >
-                Budget vs Actual
-              </TabsTrigger>
-              <TabsTrigger
-                value="expenses"
-                className="flex-shrink-0 whitespace-nowrap data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 text-xs sm:text-sm px-2 sm:px-4 py-2"
-              >
-                Expense Management
-              </TabsTrigger>
-              <TabsTrigger
-                value="ledger"
-                className="flex-shrink-0 whitespace-nowrap data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800 text-xs sm:text-sm px-2 sm:px-4 py-2"
-              >
-                General Ledger
-              </TabsTrigger>
-              <TabsTrigger
-                value="reports"
-                className="flex-shrink-0 whitespace-nowrap data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800 text-xs sm:text-sm px-2 sm:px-4 py-2"
-              >
-                Reports
-              </TabsTrigger>
-            </TabsList>
+          <Button
+            onClick={generateReport}
+            disabled={loading || !selectedReportType || !selectedPeriod}
+            className="w-full"
+          >
+            {loading ? (
+              "Generating Report..."
+            ) : (
+              <>
+                <FileText className="w-4 h-4 mr-2" />
+                Generate Report
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
 
-            <TabsContent value="funds" className="mt-6">
-              <FundTrackingPanel userRole={role} />
-            </TabsContent>
-
-            <TabsContent value="budget" className="mt-6">
-              <BudgetComparisonChart userRole={role} />
-            </TabsContent>
-
-            <TabsContent value="expenses" className="mt-6">
-              <ExpenseManagement userRole={role} />
-            </TabsContent>
-
-            <TabsContent value="ledger" className="mt-6">
-              <GeneralLedger userRole={role} />
-            </TabsContent>
-
-            <TabsContent value="reports" className="mt-6">
-              <ReportGeneration userRole={role} />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
+      {/* Generated Reports List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-green-600" />
+            Generated Reports
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {reports.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>No reports generated yet</p>
+              <p className="text-sm">
+                Generate your first report using the form above
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {reports.map((report) => (
+                <div
+                  key={report.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">
+                      {report.title}
+                    </h4>
+                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-4 h-4" />
+                        {new Date(report.generated_at).toLocaleDateString()}
+                      </span>
+                      <Badge
+                        variant={
+                          report.status === "completed"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {report.status}
+                      </Badge>
+                      <span>{report.size}</span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownload(report.id)}
+                    className="flex items-center gap-1"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
