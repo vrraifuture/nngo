@@ -1567,7 +1567,7 @@ export default function ReportGeneration({
         [],
       ];
 
-      // Fetch actual data based on report type
+      // Fetch actual data based ong report type
       if (report.type === "expense_report") {
         const { data: expenses } = await supabase
           .from("expenses")
