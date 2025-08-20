@@ -82,6 +82,26 @@ export default function ReportGeneration({
   const [categories, setCategories] = useState<any[]>([]);
   const supabase = createClient();
 
+  // Helper function to safely get category name from budget_categories
+  const getCategoryName = (budgetCategories: any): string => {
+    if (!budgetCategories) return "Uncategorized";
+    if (Array.isArray(budgetCategories)) {
+      return budgetCategories.length > 0
+        ? budgetCategories[0].name || "Uncategorized"
+        : "Uncategorized";
+    }
+    return budgetCategories.name || "Uncategorized";
+  };
+
+  // Helper function to safely get project name
+  const getProjectName = (projects: any): string => {
+    if (!projects) return "General";
+    if (Array.isArray(projects)) {
+      return projects.length > 0 ? projects[0].name || "General" : "General";
+    }
+    return projects.name || "General";
+  };
+
   useEffect(() => {
     fetchReports();
     fetchProjects();
@@ -638,7 +658,7 @@ export default function ReportGeneration({
                         (expense) => `
                     <tr>
                       <td>${expense.title || "Untitled Expense"}</td>
-                      <td>${expense.budget_categories?.name || "Uncategorized"}</td>
+                      <td>${getCategoryName(expense.budget_categories)}</td>
                       <td>FRw ${(expense.amount || 0).toLocaleString()}</td>
                       <td>${expense.expense_date ? new Date(expense.expense_date).toLocaleDateString() : "N/A"}</td>
                       <td><span style="background: ${expense.status === "paid" ? "#dcfce7" : expense.status === "approved" ? "#dbeafe" : "#fef3c7"}; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${expense.status || "pending"}</span></td>
@@ -752,8 +772,8 @@ export default function ReportGeneration({
         const expensesByProject = new Map();
 
         expenses.forEach((expense) => {
-          const category = expense.budget_categories?.name || "Uncategorized";
-          const project = expense.projects?.name || "General";
+          const category = getCategoryName(expense.budget_categories);
+          const project = getProjectName(expense.projects);
 
           expensesByCategory.set(
             category,
@@ -822,8 +842,8 @@ export default function ReportGeneration({
                         (expense) => `
                     <tr>
                       <td>${expense.title || "Untitled Expense"}</td>
-                      <td>${expense.budget_categories?.name || "Uncategorized"}</td>
-                      <td>${expense.projects?.name || "General"}</td>
+                      <td>${getCategoryName(expense.budget_categories)}</td>
+                      <td>${getProjectName(expense.projects)}</td>
                       <td>FRw ${(expense.amount || 0).toLocaleString()}</td>
                       <td>${expense.expense_date ? new Date(expense.expense_date).toLocaleDateString() : "N/A"}</td>
                       <td><span style="background: #dcfce7; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #166534;">PAID</span></td>
@@ -912,8 +932,7 @@ export default function ReportGeneration({
 
         const budgetsByCategory = new Map();
         budgets.forEach((budget) => {
-          const categoryName =
-            budget.budget_categories?.name || "Uncategorized";
+          const categoryName = getCategoryName(budget.budget_categories);
           budgetsByCategory.set(
             categoryName,
             (budgetsByCategory.get(categoryName) || 0) +
@@ -923,8 +942,7 @@ export default function ReportGeneration({
 
         const expensesByCategory = new Map();
         expenses.forEach((expense) => {
-          const categoryName =
-            expense.budget_categories?.name || "Uncategorized";
+          const categoryName = getCategoryName(expense.budget_categories);
           expensesByCategory.set(
             categoryName,
             (expensesByCategory.get(categoryName) || 0) + (expense.amount || 0),
@@ -1042,13 +1060,17 @@ export default function ReportGeneration({
         const programExpenses =
           expenses
             ?.filter((e) =>
-              e.budget_categories?.name?.toLowerCase().includes("program"),
+              getCategoryName(e.budget_categories)
+                .toLowerCase()
+                .includes("program"),
             )
             .reduce((sum, expense) => sum + expense.amount, 0) || 0;
         const adminExpenses =
           expenses
             ?.filter((e) =>
-              e.budget_categories?.name?.toLowerCase().includes("admin"),
+              getCategoryName(e.budget_categories)
+                .toLowerCase()
+                .includes("admin"),
             )
             .reduce((sum, expense) => sum + expense.amount, 0) || 0;
         const programRatio =
@@ -1240,8 +1262,8 @@ export default function ReportGeneration({
         expenses?.forEach((expense) => {
           csvContent.push([
             expense.title,
-            expense.budget_categories?.name || "Uncategorized",
-            expense.projects?.name || "General",
+            getCategoryName(expense.budget_categories),
+            getProjectName(expense.projects),
             expense.amount.toString(),
             new Date(expense.expense_date).toLocaleDateString(),
             "paid",
@@ -1564,7 +1586,6 @@ export default function ReportGeneration({
       pdf.text("Date", 160, yPos);
       yPos += 5;
 
-      // Draw line under headers
       pdf.line(20, yPos, 190, yPos);
       yPos += 5;
 
@@ -1579,7 +1600,7 @@ export default function ReportGeneration({
           expense.title.length > 20
             ? expense.title.substring(0, 17) + "..."
             : expense.title;
-        const category = expense.budget_categories?.name || "Uncategorized";
+        const category = getCategoryName(expense.budget_categories);
         const categoryShort =
           category.length > 15 ? category.substring(0, 12) + "..." : category;
 
@@ -1634,10 +1655,10 @@ export default function ReportGeneration({
           expense.title.length > 15
             ? expense.title.substring(0, 12) + "..."
             : expense.title;
-        const category = expense.budget_categories?.name || "Uncategorized";
+        const category = getCategoryName(expense.budget_categories);
         const categoryShort =
           category.length > 12 ? category.substring(0, 9) + "..." : category;
-        const project = expense.projects?.name || "General";
+        const project = getProjectName(expense.projects);
         const projectShort =
           project.length > 10 ? project.substring(0, 7) + "..." : project;
 
@@ -1685,7 +1706,7 @@ export default function ReportGeneration({
       // Calculate variances
       const budgetsByCategory = new Map();
       budgets.forEach((budget) => {
-        const categoryName = budget.budget_categories?.name || "Uncategorized";
+        const categoryName = getCategoryName(budget.budget_categories);
         budgetsByCategory.set(
           categoryName,
           (budgetsByCategory.get(categoryName) || 0) + budget.planned_amount,
@@ -1694,7 +1715,7 @@ export default function ReportGeneration({
 
       const expensesByCategory = new Map();
       expenses?.forEach((expense) => {
-        const categoryName = expense.budget_categories?.name || "Uncategorized";
+        const categoryName = getCategoryName(expense.budget_categories);
         expensesByCategory.set(
           categoryName,
           (expensesByCategory.get(categoryName) || 0) + expense.amount,
@@ -1782,13 +1803,15 @@ export default function ReportGeneration({
     const programExpenses =
       expenses
         ?.filter((e) =>
-          e.budget_categories?.name?.toLowerCase().includes("program"),
+          getCategoryName(e.budget_categories)
+            .toLowerCase()
+            .includes("program"),
         )
         .reduce((sum, expense) => sum + expense.amount, 0) || 0;
     const adminExpenses =
       expenses
         ?.filter((e) =>
-          e.budget_categories?.name?.toLowerCase().includes("admin"),
+          getCategoryName(e.budget_categories).toLowerCase().includes("admin"),
         )
         .reduce((sum, expense) => sum + expense.amount, 0) || 0;
     const programRatio =
@@ -1955,7 +1978,9 @@ export default function ReportGeneration({
         }
 
         const projectExpenses =
-          expenses?.filter((e) => e.projects?.name === project.name) || [];
+          expenses?.filter(
+            (e) => getProjectName(e.projects) === project.name,
+          ) || [];
         const projectSpent = projectExpenses.reduce(
           (sum, expense) => sum + expense.amount,
           0,
@@ -2095,7 +2120,9 @@ export default function ReportGeneration({
         }
 
         const projectExpenses =
-          expenses?.filter((e) => e.projects?.name === project.name) || [];
+          expenses?.filter(
+            (e) => getProjectName(e.projects) === project.name,
+          ) || [];
         const projectSpent = projectExpenses.reduce(
           (sum, expense) => sum + expense.amount,
           0,
