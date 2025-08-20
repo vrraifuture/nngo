@@ -964,7 +964,7 @@ export default function ReportGeneration({
 
         try {
           // Build date filter if provided
-          let dateFilter = {};
+          let dateFilter: { gte?: string; lte?: string } = {};
           if (report.parameters?.dateFrom) {
             dateFilter = { ...dateFilter, gte: report.parameters.dateFrom };
           }
