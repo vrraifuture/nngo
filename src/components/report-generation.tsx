@@ -158,7 +158,7 @@ export default function ReportGeneration({
 
       const allReports = [...dbReports, ...localReports];
 
-      // Remove duplicates based on name and sort by date
+      // Remove duplicates based on namde and sort by date
       const uniqueReports = allReports
         .filter(
           (report, index, self) =>
