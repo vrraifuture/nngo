@@ -866,7 +866,7 @@ export default function ReportGeneration({
         const { data: expenses } = await supabase.from("expenses").select("*");
         dataSize = (budgets?.length || 0) * 250 + (expenses?.length || 0) * 200;
       } else {
-        dataSize = 5000; // Default sizve for other reports
+        dataSize = 5000; // Default size for other reports
       }
 
       // Add base HTML structure size

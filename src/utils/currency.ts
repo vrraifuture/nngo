@@ -268,10 +268,3 @@ export async function setDefaultCurrency(
     return false;
   }
 }
-
-// Global type declaration for window object
-declare global {
-  interface Window {
-    defaultCurrency?: Currency;
-  }
-}
