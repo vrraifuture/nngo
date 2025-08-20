@@ -1051,28 +1051,6 @@ export default function ReportGeneration({
               },
             ];
           }
-
-          // Get category breakdown
-          const categoryBreakdown = expenses.reduce((acc, expense) => {
-            const categoryName = getCategoryName(expense.budget_categories);
-            if (!acc[categoryName]) {
-              acc[categoryName] = { total: 0, count: 0 };
-            }
-            acc[categoryName].total += expense.amount || 0;
-            acc[categoryName].count += 1;
-            return acc;
-          }, {});
-
-          // Get project breakdown
-          const projectBreakdown = expenses.reduce((acc, expense) => {
-            const projectName = getProjectName(expense.projects);
-            if (!acc[projectName]) {
-              acc[projectName] = { total: 0, count: 0 };
-            }
-            acc[projectName].total += expense.amount || 0;
-            acc[projectName].count += 1;
-            return acc;
-          }, {});
         } catch (error) {
           console.error("Error fetching expense report data:", error);
           expenses = [
@@ -1114,15 +1092,18 @@ export default function ReportGeneration({
           expenses.length > 0 ? totalExpenses / expenses.length : 0;
 
         // Category breakdown
-        const categoryBreakdown = expenses.reduce((acc, expense) => {
-          const categoryName = getCategoryName(expense.budget_categories);
-          if (!acc[categoryName]) {
-            acc[categoryName] = { total: 0, count: 0 };
-          }
-          acc[categoryName].total += expense.amount || 0;
-          acc[categoryName].count += 1;
-          return acc;
-        }, {});
+        const categoryBreakdown = expenses.reduce(
+          (acc, expense) => {
+            const categoryName = getCategoryName(expense.budget_categories);
+            if (!acc[categoryName]) {
+              acc[categoryName] = { total: 0, count: 0 };
+            }
+            acc[categoryName].total += expense.amount || 0;
+            acc[categoryName].count += 1;
+            return acc;
+          },
+          {} as { [key: string]: { total: number; count: number } },
+        );
 
         reportData = `
           <div class="summary-card">
