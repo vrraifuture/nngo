@@ -2140,7 +2140,7 @@ export default function ReportGeneration({
         </DialogContent>
       </Dialog>
 
-      {/* Generated Reports */}
+      {/* Generated Rweports */}
       <Card>
         <CardHeader>
           <CardTitle>Generated Reports</CardTitle>
