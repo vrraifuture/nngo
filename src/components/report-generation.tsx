@@ -517,8 +517,8 @@ export default function ReportGeneration({
     try {
       if (report.type === "financial_summary") {
         // Enhanced data fetching with better error handling and fallbacks
-        let funds = [];
-        let expenses = [];
+        let funds: any[] = [];
+        let expenses: any[] = [];
 
         console.log("Fetching financial summary data...");
 
@@ -686,9 +686,9 @@ export default function ReportGeneration({
         `;
       } else if (report.type === "donor_report") {
         // Donor Impact Report Implementation
-        let donors = [];
-        let fundSources = [];
-        let expenses = [];
+        let donors: any[] = [];
+        let fundSources: any[] = [];
+        let expenses: any[] = [];
 
         console.log("Fetching donor report data...");
 
@@ -961,9 +961,9 @@ export default function ReportGeneration({
         `;
       } else if (report.type === "expense_report") {
         // Expense Analysis Report Implementation
-        let expenses = [];
-        let categories = [];
-        let projects = [];
+        let expenses: any[] = [];
+        let categories: any[] = [];
+        let projects: any[] = [];
 
         console.log("Fetching expense report data...");
 
@@ -1220,9 +1220,9 @@ export default function ReportGeneration({
         `;
       } else if (report.type === "budget_variance") {
         // Budget Variance Report Implementation
-        let budgets = [];
-        let expenses = [];
-        let variances = [];
+        let budgets: any[] = [];
+        let expenses: any[] = [];
+        let variances: any[] = [];
 
         console.log("Fetching budget variance report data...");
 
