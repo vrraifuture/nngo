@@ -964,12 +964,17 @@ export default function ReportGeneration({
 
         try {
           // Build date filter if provided
-          let dateFilter = {};
+          interface DateFilter {
+            gte?: string;
+            lte?: string;
+          }
+
+          let dateFilter: DateFilter = {};
           if (report.parameters?.dateFrom) {
-            dateFilter = { ...dateFilter, gte: report.parameters.dateFrom };
+            dateFilter.gte = report.parameters.dateFrom;
           }
           if (report.parameters?.dateTo) {
-            dateFilter = { ...dateFilter, lte: report.parameters.dateTo };
+            dateFilter.lte = report.parameters.dateTo;
           }
 
           // Fetch expenses with related data
@@ -981,12 +986,14 @@ export default function ReportGeneration({
             .in("status", ["approved", "paid"])
             .order("expense_date", { ascending: false });
 
-          if (Object.keys(dateFilter).length > 0) {
-            expenseQuery = expenseQuery.filter(
-              "expense_date",
-              "gte",
-              dateFilter.gte || "1900-01-01",
-            );
+          if (dateFilter.gte || dateFilter.lte) {
+            if (dateFilter.gte) {
+              expenseQuery = expenseQuery.filter(
+                "expense_date",
+                "gte",
+                dateFilter.gte,
+              );
+            }
             if (dateFilter.lte) {
               expenseQuery = expenseQuery.filter(
                 "expense_date",
