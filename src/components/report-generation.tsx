@@ -73,6 +73,11 @@ interface ReportGenerationProps {
   userRole: string;
 }
 
+interface CategoryBreakdownData {
+  total: number;
+  count: number;
+}
+
 export default function ReportGeneration({
   userRole = "admin",
 }: ReportGenerationProps) {
@@ -1060,15 +1065,19 @@ export default function ReportGeneration({
           }
 
           // Get category breakdown
-          const categoryBreakdown = expenses.reduce((acc, expense) => {
-            const categoryName = getCategoryName(expense.budget_categories);
-            if (!acc[categoryName]) {
-              acc[categoryName] = { total: 0, count: 0 };
-            }
-            acc[categoryName].total += expense.amount || 0;
-            acc[categoryName].count += 1;
-            return acc;
-          }, {});
+          const categoryBreakdown: Record<string, CategoryBreakdownData> =
+            expenses.reduce(
+              (acc, expense) => {
+                const categoryName = getCategoryName(expense.budget_categories);
+                if (!acc[categoryName]) {
+                  acc[categoryName] = { total: 0, count: 0 };
+                }
+                acc[categoryName].total += expense.amount || 0;
+                acc[categoryName].count += 1;
+                return acc;
+              },
+              {} as Record<string, CategoryBreakdownData>,
+            );
 
           // Get project breakdown
           const projectBreakdown = expenses.reduce((acc, expense) => {
@@ -1121,15 +1130,19 @@ export default function ReportGeneration({
           expenses.length > 0 ? totalExpenses / expenses.length : 0;
 
         // Category breakdown
-        const categoryBreakdown = expenses.reduce((acc, expense) => {
-          const categoryName = getCategoryName(expense.budget_categories);
-          if (!acc[categoryName]) {
-            acc[categoryName] = { total: 0, count: 0 };
-          }
-          acc[categoryName].total += expense.amount || 0;
-          acc[categoryName].count += 1;
-          return acc;
-        }, {});
+        const categoryBreakdown: Record<string, CategoryBreakdownData> =
+          expenses.reduce(
+            (acc, expense) => {
+              const categoryName = getCategoryName(expense.budget_categories);
+              if (!acc[categoryName]) {
+                acc[categoryName] = { total: 0, count: 0 };
+              }
+              acc[categoryName].total += expense.amount || 0;
+              acc[categoryName].count += 1;
+              return acc;
+            },
+            {} as Record<string, CategoryBreakdownData>,
+          );
 
         reportData = `
           <div class="summary-card">
@@ -1200,7 +1213,7 @@ export default function ReportGeneration({
             <ul>
               <li><strong>Largest Expense:</strong> FRw ${expenses.length > 0 ? Math.max(...expenses.map((e) => e.amount || 0)).toLocaleString() : "0"}</li>
               <li><strong>Smallest Expense:</strong> FRw ${expenses.length > 0 ? Math.min(...expenses.map((e) => e.amount || 0)).toLocaleString() : "0"}</li>
-              <li><strong>Most Active Category:</strong> ${Object.entries(categoryBreakdown).sort(([, a], [, b]) => b.count - a.count)[0]?.[0] || "N/A"}</li>
+              <li><strong>Most Active Category:</strong> ${Object.entries(categoryBreakdown).sort(([, a], [, b]) => (b as CategoryBreakdownData).count - (a as CategoryBreakdownData).count)[0]?.[0] || "N/A"}</li>
               <li><strong>Paid Expenses:</strong> ${expenses.filter((e) => e.status === "paid").length} transactions</li>
             </ul>
           </div>
