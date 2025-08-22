@@ -8,6 +8,7 @@ import DashboardCurrencyUpdater from "@/components/dashboard-currency-updater";
 import DashboardCurrencyDisplay from "@/components/dashboard-currency-display";
 import PermissionInitializer from "@/components/permission-initializer";
 import FinancialIntegrationHelper from "@/components/financial-integration-helper";
+import DashboardReportsCounter from "@/components/dashboard-reports-counter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -466,9 +467,7 @@ export default async function Dashboard() {
                 <FileText className="h-4 w-4 text-purple-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-gray-900">
-                  {reportsThisMonth}
-                </div>
+                <DashboardReportsCounter className="text-2xl font-bold text-gray-900" />
                 <p className="text-xs text-gray-500 mt-1">This month</p>
               </CardContent>
             </Card>

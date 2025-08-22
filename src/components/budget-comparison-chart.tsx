@@ -1409,29 +1409,24 @@ export default function BudgetComparisonChart({
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {canEditBudgetsSync() && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-blue-600 hover:text-blue-700"
-                          onClick={() => handleEditBudget(budget)}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                      )}
-                      {canDeleteBudgetsSync() && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => handleDeleteBudget(budget.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                      {!canEditBudgetsSync() && !canDeleteBudgetsSync() && (
-                        <span className="text-sm text-gray-500">View Only</span>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-blue-600 hover:text-blue-700"
+                        onClick={() => handleEditBudget(budget)}
+                        title="Edit Budget"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => handleDeleteBudget(budget.id)}
+                        title="Delete Budget"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

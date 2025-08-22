@@ -757,12 +757,13 @@ export default function FundTrackingPanel({
               <Label htmlFor="donor_type">Donor Type</Label>
               <Select
                 value={newDonor.type}
-                onValueChange={(value) =>
-                  setNewDonor({ ...newDonor, type: value })
-                }
+                onValueChange={(value) => {
+                  console.log("Donor type changed to:", value);
+                  setNewDonor({ ...newDonor, type: value });
+                }}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select donor type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="individual">Individual</SelectItem>
