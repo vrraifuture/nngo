@@ -946,7 +946,7 @@ export default function BudgetComparisonChart({
                 Export Data
               </Button>
 
-              {canManageBudgetsSync() && (
+              {(userRole === "admin" || canManageBudgetsSync()) && (
                 <>
                   <Dialog
                     open={showImportDialog}
@@ -1409,24 +1409,28 @@ export default function BudgetComparisonChart({
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-blue-600 hover:text-blue-700"
-                        onClick={() => handleEditBudget(budget)}
-                        title="Edit Budget"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-red-600 hover:text-red-700"
-                        onClick={() => handleDeleteBudget(budget.id)}
-                        title="Delete Budget"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {(userRole === "admin" || canEditBudgetsSync()) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => handleEditBudget(budget)}
+                          title="Edit Budget"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {(userRole === "admin" || canDeleteBudgetsSync()) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => handleDeleteBudget(budget.id)}
+                          title="Delete Budget"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
