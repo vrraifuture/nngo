@@ -85,6 +85,8 @@ export default function ReportGeneration({
   const [projects, setProjects] = useState<any[]>([]);
   const [donors, setDonors] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const supabase = createClient();
 
   // Helper function to safely get category name from budget_categories
@@ -108,10 +110,18 @@ export default function ReportGeneration({
   };
 
   useEffect(() => {
-    fetchReports();
-    fetchProjects();
-    fetchDonors();
-    fetchCategories();
+    const initializeData = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchReports(),
+        fetchProjects(),
+        fetchDonors(),
+        fetchCategories(),
+      ]);
+      setLoading(false);
+    };
+
+    initializeData();
   }, []);
 
   const fetchReports = async () => {
@@ -179,11 +189,8 @@ export default function ReportGeneration({
       setReports(uniqueReports);
     } catch (error) {
       console.error("Error in fetchReports:", error);
-      // Always fallback to localStorage
-      const localReports = JSON.parse(
-        localStorage.getItem("ngo_reports") || "[]",
-      );
-      setReports(localReports);
+      // No localStorage fallback, just empty array
+      setReports([]);
     }
   };
 
@@ -343,6 +350,8 @@ export default function ReportGeneration({
 
   const handleGenerateReport = async () => {
     try {
+      setGenerating(true);
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -457,9 +466,14 @@ export default function ReportGeneration({
         includeDetails: true,
         format: "pdf",
       });
+
+      // Dispatch custom event for reports counter
+      window.dispatchEvent(new CustomEvent("reportGenerated"));
     } catch (error) {
       console.error("Error generating report:", error);
       alert("An unexpected error occurred. Please try again.");
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -1856,6 +1870,20 @@ export default function ReportGeneration({
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          <div className="text-gray-500">Loading report generation...</div>
+          <div className="text-xs text-gray-400">
+            Preparing report templates and data
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 bg-white">
       {/* Report Templates */}
@@ -2151,9 +2179,16 @@ export default function ReportGeneration({
               </Button>
               <Button
                 onClick={handleGenerateReport}
-                disabled={!reportParameters.name}
+                disabled={!reportParameters.name || generating}
               >
-                Generate Report
+                {generating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generating...
+                  </>
+                ) : (
+                  "Generate Report"
+                )}
               </Button>
             </div>
           </div>

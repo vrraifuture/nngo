@@ -150,279 +150,328 @@ export default function GeneralLedger({
 
   const supabase = createClient();
 
-  // Initialize chart of accounts
-  const initializeChartOfAccounts = () => {
-    const defaultAccounts: AccountType[] = [
-      // Assets
-      {
-        code: "1000",
-        name: "Cash - General Fund",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1010",
-        name: "Cash - Restricted Fund",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1100",
-        name: "Accounts Receivable",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1200",
-        name: "Grants Receivable",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1500",
-        name: "Equipment",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1600",
-        name: "Accumulated Depreciation",
-        type: "asset",
-        normal_balance: "credit",
-      },
+  // Initialize chart of accounts from database
+  const initializeChartOfAccounts = async () => {
+    try {
+      // Try to fetch from database first
+      const { data: dbAccounts, error } = await supabase
+        .from("chart_of_accounts")
+        .select("*")
+        .order("code");
 
-      // Liabilities
-      {
-        code: "2000",
-        name: "Accounts Payable",
-        type: "liability",
-        normal_balance: "credit",
-      },
-      {
-        code: "2100",
-        name: "Accrued Expenses",
-        type: "liability",
-        normal_balance: "credit",
-      },
-      {
-        code: "2200",
-        name: "Deferred Revenue",
-        type: "liability",
-        normal_balance: "credit",
-      },
+      if (!error && dbAccounts && dbAccounts.length > 0) {
+        console.log(`Loaded ${dbAccounts.length} accounts from database`);
+        setChartOfAccounts(dbAccounts);
+        return;
+      }
 
-      // Net Assets/Equity
-      {
-        code: "3000",
-        name: "Net Assets - Unrestricted",
-        type: "equity",
-        normal_balance: "credit",
-      },
-      {
-        code: "3100",
-        name: "Net Assets - Temporarily Restricted",
-        type: "equity",
-        normal_balance: "credit",
-      },
-      {
-        code: "3200",
-        name: "Net Assets - Permanently Restricted",
-        type: "equity",
-        normal_balance: "credit",
-      },
+      console.log("No accounts found in database, using default accounts");
 
-      // Revenue
-      {
-        code: "4000",
-        name: "Donations - Unrestricted",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4100",
-        name: "Donations - Restricted",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4200",
-        name: "Grant Revenue",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4300",
-        name: "Program Service Revenue",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4400",
-        name: "Investment Income",
-        type: "revenue",
-        normal_balance: "credit",
-      },
+      // Default accounts for NGO
+      const defaultAccounts: AccountType[] = [
+        // Assets
+        {
+          code: "1000",
+          name: "Cash - General Fund",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1010",
+          name: "Cash - Restricted Fund",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1100",
+          name: "Accounts Receivable",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1200",
+          name: "Grants Receivable",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1500",
+          name: "Equipment",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1600",
+          name: "Accumulated Depreciation",
+          type: "asset",
+          normal_balance: "credit",
+        },
 
-      // Expenses
-      {
-        code: "5000",
-        name: "Program Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5100",
-        name: "Personnel Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5200",
-        name: "Administrative Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5300",
-        name: "Fundraising Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5400",
-        name: "Travel & Transportation",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5500",
-        name: "Equipment & Supplies",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5600",
-        name: "Professional Services",
-        type: "expense",
-        normal_balance: "debit",
-      },
-    ];
+        // Liabilities
+        {
+          code: "2000",
+          name: "Accounts Payable",
+          type: "liability",
+          normal_balance: "credit",
+        },
+        {
+          code: "2100",
+          name: "Accrued Expenses",
+          type: "liability",
+          normal_balance: "credit",
+        },
+        {
+          code: "2200",
+          name: "Deferred Revenue",
+          type: "liability",
+          normal_balance: "credit",
+        },
 
-    // Load from localStorage if available
-    const savedAccounts = localStorage.getItem("ngo_chart_of_accounts");
-    if (savedAccounts) {
-      setChartOfAccounts(JSON.parse(savedAccounts));
-    } else {
+        // Net Assets/Equity
+        {
+          code: "3000",
+          name: "Net Assets - Unrestricted",
+          type: "equity",
+          normal_balance: "credit",
+        },
+        {
+          code: "3100",
+          name: "Net Assets - Temporarily Restricted",
+          type: "equity",
+          normal_balance: "credit",
+        },
+        {
+          code: "3200",
+          name: "Net Assets - Permanently Restricted",
+          type: "equity",
+          normal_balance: "credit",
+        },
+
+        // Revenue
+        {
+          code: "4000",
+          name: "Donations - Unrestricted",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4100",
+          name: "Donations - Restricted",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4200",
+          name: "Grant Revenue",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4300",
+          name: "Program Service Revenue",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4400",
+          name: "Investment Income",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+
+        // Expenses
+        {
+          code: "5000",
+          name: "Program Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5100",
+          name: "Personnel Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5200",
+          name: "Administrative Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5300",
+          name: "Fundraising Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5400",
+          name: "Travel & Transportation",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5500",
+          name: "Equipment & Supplies",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5600",
+          name: "Professional Services",
+          type: "expense",
+          normal_balance: "debit",
+        },
+      ];
+
       setChartOfAccounts(defaultAccounts);
-      localStorage.setItem(
-        "ngo_chart_of_accounts",
-        JSON.stringify(defaultAccounts),
-      );
+
+      // Try to seed the database with default accounts
+      try {
+        const { error: insertError } = await supabase
+          .from("chart_of_accounts")
+          .insert(defaultAccounts);
+
+        if (!insertError) {
+          console.log("Successfully seeded chart of accounts in database");
+        }
+      } catch (seedError) {
+        console.log(
+          "Could not seed database with default accounts:",
+          seedError,
+        );
+      }
+    } catch (error) {
+      console.error("Error initializing chart of accounts:", error);
+      // Fallback to empty array if everything fails
+      setChartOfAccounts([]);
     }
   };
 
   useEffect(() => {
-    initializeChartOfAccounts();
-    fetchLedgerEntries();
-    loadCustomAccountTypes();
+    const initializeData = async () => {
+      setLoading(true);
+      await initializeChartOfAccounts();
+      await fetchLedgerEntries();
+      await loadCustomAccountTypes();
+      setLoading(false);
+    };
+
+    initializeData();
   }, []);
 
   const fetchLedgerEntries = async () => {
     try {
-      // For now, we'll use localStorage to simulate database storage
-      const savedEntries = localStorage.getItem("ngo_ledger_entries");
-      if (savedEntries) {
-        setLedgerEntries(JSON.parse(savedEntries));
-      } else {
-        // Initialize with some sample data
-        const sampleEntries: LedgerEntry[] = [
-          {
-            id: "1",
-            account_code: "1000",
-            account_name: "Cash - General Fund",
-            date: "2024-01-15",
-            description: "Initial donation received",
-            debit: 10000,
-            credit: 0,
-            reference_number: "DON-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: "2",
-            account_code: "4000",
-            account_name: "Donations - Unrestricted",
-            date: "2024-01-15",
-            description: "Initial donation received",
-            debit: 0,
-            credit: 10000,
-            reference_number: "DON-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: "3",
-            account_code: "5000",
-            account_name: "Program Expenses",
-            date: "2024-01-20",
-            description: "Educational materials purchase",
-            debit: 2500,
-            credit: 0,
-            reference_number: "EXP-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: "4",
-            account_code: "1000",
-            account_name: "Cash - General Fund",
-            date: "2024-01-20",
-            description: "Educational materials purchase",
-            debit: 0,
-            credit: 2500,
-            reference_number: "EXP-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-        ];
-        setLedgerEntries(sampleEntries);
-        localStorage.setItem(
-          "ngo_ledger_entries",
-          JSON.stringify(sampleEntries),
-        );
+      console.log("Fetching ledger entries from database...");
+
+      // Try to fetch from database first
+      const { data: dbEntries, error } = await supabase
+        .from("ledger_entries")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && dbEntries && dbEntries.length > 0) {
+        console.log(`Loaded ${dbEntries.length} ledger entries from database`);
+        setLedgerEntries(dbEntries);
+        return;
       }
+
+      console.log("No ledger entries found in database, using sample data");
+
+      // Sample entries for demonstration
+      const sampleEntries: LedgerEntry[] = [
+        {
+          id: "sample_1",
+          account_code: "1000",
+          account_name: "Cash - General Fund",
+          date: "2024-01-15",
+          description: "Initial donation received",
+          debit: 10000,
+          credit: 0,
+          reference_number: "DON-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "sample_2",
+          account_code: "4000",
+          account_name: "Donations - Unrestricted",
+          date: "2024-01-15",
+          description: "Initial donation received",
+          debit: 0,
+          credit: 10000,
+          reference_number: "DON-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "sample_3",
+          account_code: "5000",
+          account_name: "Program Expenses",
+          date: "2024-01-20",
+          description: "Educational materials purchase",
+          debit: 2500,
+          credit: 0,
+          reference_number: "EXP-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "sample_4",
+          account_code: "1000",
+          account_name: "Cash - General Fund",
+          date: "2024-01-20",
+          description: "Educational materials purchase",
+          debit: 0,
+          credit: 2500,
+          reference_number: "EXP-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+      ];
+
+      setLedgerEntries(sampleEntries);
     } catch (error) {
       console.error("Error fetching ledger entries:", error);
       setLedgerEntries([]);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const saveLedgerEntries = (entries: LedgerEntry[]) => {
+  const saveLedgerEntries = async (entries: LedgerEntry[]) => {
     setLedgerEntries(entries);
-    localStorage.setItem("ngo_ledger_entries", JSON.stringify(entries));
+    // No localStorage usage - data should be saved to database through individual operations
   };
 
-  const saveChartOfAccounts = (accounts: AccountType[]) => {
+  const saveChartOfAccounts = async (accounts: AccountType[]) => {
     setChartOfAccounts(accounts);
-    localStorage.setItem("ngo_chart_of_accounts", JSON.stringify(accounts));
+    // No localStorage usage - data should be saved to database through individual operations
   };
 
-  const loadCustomAccountTypes = () => {
+  const loadCustomAccountTypes = async () => {
     try {
-      const savedTypes = localStorage.getItem("ngo_custom_account_types");
-      if (savedTypes) {
-        setCustomAccountTypes(JSON.parse(savedTypes));
+      console.log("Loading custom account types from database...");
+
+      const { data: customTypes, error } = await supabase
+        .from("custom_account_types")
+        .select("*")
+        .order("name");
+
+      if (!error && customTypes) {
+        console.log(`Loaded ${customTypes.length} custom account types`);
+        setCustomAccountTypes(customTypes);
+      } else {
+        console.log("No custom account types found");
+        setCustomAccountTypes([]);
       }
     } catch (error) {
       console.error("Error loading custom account types:", error);
+      setCustomAccountTypes([]);
     }
   };
 
-  const saveCustomAccountTypes = (types: any[]) => {
+  const saveCustomAccountTypes = async (types: any[]) => {
     setCustomAccountTypes(types);
-    localStorage.setItem("ngo_custom_account_types", JSON.stringify(types));
+    // Individual custom account types should be saved through specific database operations
   };
 
   const handleAddAccountType = () => {
@@ -656,7 +705,7 @@ export default function GeneralLedger({
     );
   };
 
-  const handleAddEntry = () => {
+  const handleAddEntry = async () => {
     // Check permissions using the permission system
     if (!canManageLedgerSync()) {
       alert("You don't have permission to add ledger entries.");
@@ -684,33 +733,55 @@ export default function GeneralLedger({
       (acc) => acc.code === newEntry.account_code,
     );
 
-    const entry: LedgerEntry = {
-      id: Date.now().toString(),
-      account_code: newEntry.account_code,
-      account_name: selectedAccount?.name || newEntry.account_name,
-      date: newEntry.date,
-      description: newEntry.description,
-      debit: debitAmount,
-      credit: creditAmount,
-      reference_number: newEntry.reference_number || undefined,
-      created_by: "Current User",
-      created_at: new Date().toISOString(),
-    };
+    try {
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    const newEntries = [...ledgerEntries, entry];
-    saveLedgerEntries(newEntries);
+      const entry: LedgerEntry = {
+        id: Date.now().toString(),
+        account_code: newEntry.account_code,
+        account_name: selectedAccount?.name || newEntry.account_name,
+        date: newEntry.date,
+        description: newEntry.description,
+        debit: debitAmount,
+        credit: creditAmount,
+        reference_number: newEntry.reference_number || undefined,
+        created_by: user?.email || "Current User",
+        created_at: new Date().toISOString(),
+      };
 
-    // Reset form
-    setNewEntry({
-      account_code: "",
-      account_name: "",
-      date: new Date().toISOString().split("T")[0],
-      description: "",
-      debit: "",
-      credit: "",
-      reference_number: "",
-    });
-    setShowAddDialog(false);
+      // Try to save to database
+      const { error } = await supabase.from("ledger_entries").insert([entry]);
+
+      if (error) {
+        console.error("Error saving to database:", error);
+        // Add to local state as fallback
+        const newEntries = [...ledgerEntries, entry];
+        setLedgerEntries(newEntries);
+        alert("Entry added locally. Database save failed.");
+      } else {
+        // Refresh from database
+        await fetchLedgerEntries();
+        alert("Ledger entry added successfully!");
+      }
+
+      // Reset form
+      setNewEntry({
+        account_code: "",
+        account_name: "",
+        date: new Date().toISOString().split("T")[0],
+        description: "",
+        debit: "",
+        credit: "",
+        reference_number: "",
+      });
+      setShowAddDialog(false);
+    } catch (error) {
+      console.error("Error adding ledger entry:", error);
+      alert("Failed to add ledger entry. Please try again.");
+    }
   };
 
   const handleEditEntry = (entry: LedgerEntry) => {
@@ -1158,7 +1229,13 @@ export default function GeneralLedger({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 bg-white">
-        <div className="text-gray-500">Loading general ledger...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="text-gray-500">Loading general ledger data...</div>
+          <div className="text-xs text-gray-400">
+            Fetching accounts and entries from database
+          </div>
+        </div>
       </div>
     );
   }

@@ -485,7 +485,13 @@ export default function ExpenseManagement({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 bg-white">
-        <div className="text-gray-500">Loading expense data...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+          <div className="text-gray-500">Loading expense management...</div>
+          <div className="text-xs text-gray-400">
+            Fetching expenses, categories, and projects
+          </div>
+        </div>
       </div>
     );
   }
