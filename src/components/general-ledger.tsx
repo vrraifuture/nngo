@@ -739,8 +739,39 @@ export default function GeneralLedger({
         data: { user },
       } = await supabase.auth.getUser();
 
+      // Prepare entry for database insertion (without id and created_at as they're auto-generated)
+      const entryForDB = {
+        account_code: newEntry.account_code,
+        account_name: selectedAccount?.name || newEntry.account_name,
+        date: newEntry.date,
+        description: newEntry.description,
+        debit: debitAmount,
+        credit: creditAmount,
+        reference_number: newEntry.reference_number || null,
+        created_by: user?.id || null,
+      };
+
+      console.log("Attempting to save ledger entry:", entryForDB);
+
+      // Try to save to database
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .insert([entryForDB])
+        .select();
+
+      if (error) {
+        console.error("Database insertion error details:", {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+      }
+
+      // Create full entry object for local state
       const entry: LedgerEntry = {
-        id: Date.now().toString(),
+        id: data?.[0]?.id || Date.now().toString(),
         account_code: newEntry.account_code,
         account_name: selectedAccount?.name || newEntry.account_name,
         date: newEntry.date,
@@ -749,20 +780,20 @@ export default function GeneralLedger({
         credit: creditAmount,
         reference_number: newEntry.reference_number || undefined,
         created_by: user?.email || "Current User",
-        created_at: new Date().toISOString(),
+        created_at: data?.[0]?.created_at || new Date().toISOString(),
       };
-
-      // Try to save to database
-      const { error } = await supabase.from("ledger_entries").insert([entry]);
 
       if (error) {
         console.error("Error saving to database:", error);
         // Add to local state as fallback
         const newEntries = [...ledgerEntries, entry];
         setLedgerEntries(newEntries);
-        alert("Entry added locally. Database save failed.");
+        alert(
+          `Entry added locally. Database save failed: ${error.message || "Unknown error"}. Please check your database connection and permissions.`,
+        );
       } else {
-        // Refresh from database
+        console.log("Successfully saved to database:", data);
+        // Refresh from database to get the latest data
         await fetchLedgerEntries();
         alert("Ledger entry added successfully!");
       }
