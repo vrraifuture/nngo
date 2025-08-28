@@ -2027,7 +2027,7 @@ export default function ReportGeneration({
     } catch (error) {
       console.error("Error generating Excel:", error);
       alert(
-        `Error generating Excel report: ${error.message}. Please try again.`,
+        `Error generating Excel report: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
       );
     }
   };
