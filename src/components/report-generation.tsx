@@ -1786,7 +1786,7 @@ export default function ReportGeneration({
         console.error("Error fetching report data:", dataError);
         csvContent.push([
           "Error fetching data",
-          dataError.message || "Unknown error",
+          dataError instanceof Error ? dataError.message : "Unknown error",
         ]);
         // Add sample data even on error
         csvContent.push([
