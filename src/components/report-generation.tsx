@@ -1982,7 +1982,7 @@ export default function ReportGeneration({
         console.error("Error fetching data for Excel:", dataError);
         excelContent += `
           <tr class="header"><td colspan="6"><b>Error Information</b></td></tr>
-          <tr><td>Error Message</td><td>${dataError.message || "Unknown error"}</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>Error Message</td><td>${dataError instanceof Error ? dataError.message : "Unknown error"}</td><td></td><td></td><td></td><td></td></tr>
           <tr><td>Sample Data</td><td>This report contains sample data due to database error</td><td></td><td></td><td></td><td></td></tr>
         `;
       }
