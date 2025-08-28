@@ -1784,13 +1784,10 @@ export default function ReportGeneration({
         }
       } catch (dataError) {
         console.error("Error fetching report data:", dataError);
-
-        const errorMessage =
-          dataError instanceof Error
-            ? dataError.message
-            : "Unknown error occurred";
-
-        csvContent.push(["Error fetching data", errorMessage]);
+        csvContent.push([
+          "Error fetching data",
+          dataError.message || "Unknown error",
+        ]);
         // Add sample data even on error
         csvContent.push([
           "Sample Data",
@@ -1851,19 +1848,9 @@ export default function ReportGeneration({
 
       console.log("CSV download initiated successfully");
       alert(`CSV report "${report.name}" downloaded successfully!`);
-    } catch (dataError) {
-      console.error("Error fetching data for Excel:", dataError);
-
-      const errorMessage =
-        dataError instanceof Error
-          ? dataError.message
-          : "Unknown error occurred";
-
-      excelContent += `
-    <tr class="header"><td colspan="6"><b>Error Information</b></td></tr>
-    <tr><td>Error Message</td><td>${errorMessage}</td><td></td><td></td><td></td><td></td></tr>
-    <tr><td>Sample Data</td><td>This report contains sample data due to database error</td><td></td><td></td><td></td><td></td></tr>
-  `;
+    } catch (error) {
+      console.error("Error generating CSV:", error);
+      alert(`Error generating CSV report: ${error.message}. Please try again.`);
     }
   };
 
