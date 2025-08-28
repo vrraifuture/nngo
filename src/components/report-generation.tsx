@@ -1850,7 +1850,9 @@ export default function ReportGeneration({
       alert(`CSV report "${report.name}" downloaded successfully!`);
     } catch (error) {
       console.error("Error generating CSV:", error);
-      alert(`Error generating CSV report: ${error.message}. Please try again.`);
+      alert(
+        `Error generating CSV report: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
+      );
     }
   };
 
