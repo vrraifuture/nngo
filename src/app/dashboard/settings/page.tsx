@@ -24,6 +24,149 @@ export default function SettingsPage() {
   return <SettingsPageContent />;
 }
 
+// Projects List Component
+function ProjectsList({ supabase }: { supabase: any }) {
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      console.log("Loading projects...");
+
+      // Try database first
+      const { data: dbProjects, error } = await supabase
+        .from("projects")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      let allProjects: any[] = [];
+
+      if (!error && dbProjects) {
+        console.log(`Found ${dbProjects.length} projects in database`);
+        allProjects = [...dbProjects];
+      } else {
+        console.log("Database error or no projects:", error);
+      }
+
+      // Also get localStorage projects
+      try {
+        const stored = localStorage.getItem("ngo_projects");
+        if (stored) {
+          const localProjects = JSON.parse(stored);
+          console.log(`Found ${localProjects.length} projects in localStorage`);
+          // Merge with database projects, avoiding duplicates
+          localProjects.forEach((localProject: any) => {
+            if (!allProjects.find((p) => p.id === localProject.id)) {
+              allProjects.push(localProject);
+            }
+          });
+        }
+      } catch (localError) {
+        console.error("Error loading from localStorage:", localError);
+      }
+
+      console.log(`Total projects loaded: ${allProjects.length}`);
+      setProjects(allProjects);
+    } catch (error) {
+      console.error("Error in loadProjects:", error);
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteProject = async (project: any) => {
+    if (
+      !confirm(
+        `Are you sure you want to delete project "${project.name}"? This action cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      // Try to delete from database first
+      const { error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", project.id);
+
+      if (error) {
+        console.error("Database delete error:", error);
+        // Fallback to localStorage deletion
+        const existingProjects = JSON.parse(
+          localStorage.getItem("ngo_projects") || "[]",
+        );
+        const updatedProjects = existingProjects.filter(
+          (p: any) => p.id !== project.id,
+        );
+        localStorage.setItem("ngo_projects", JSON.stringify(updatedProjects));
+        alert(`Project "${project.name}" deleted from local storage.`);
+      } else {
+        alert(`Project "${project.name}" deleted successfully from database.`);
+      }
+
+      // Reload projects
+      await loadProjects();
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      alert("Error deleting project. Please try again.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white border rounded p-3">
+        <h5 className="font-medium text-gray-800 mb-3">Current Projects</h5>
+        <div className="flex items-center justify-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+          <span className="ml-2 text-gray-500">Loading projects...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border rounded p-3">
+      <h5 className="font-medium text-gray-800 mb-3">Current Projects</h5>
+      <div className="space-y-2">
+        {projects.length === 0 ? (
+          <p className="text-gray-500 text-sm">No projects created yet.</p>
+        ) : (
+          projects.map((project: any) => (
+            <div
+              key={project.id}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded border"
+            >
+              <div>
+                <div className="font-medium text-sm">{project.name}</div>
+                <div className="text-xs text-gray-500">
+                  {project.description || "No description"} | Status:{" "}
+                  {project.status || "active"} | Created:{" "}
+                  {new Date(project.created_at).toLocaleDateString()}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => deleteProject(project)}
+                  className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Client component for the main settings functionality
 function SettingsPageContent() {
   const [loading, setLoading] = useState(true);
@@ -847,6 +990,108 @@ function SettingsPageContent() {
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                       </label>
                     </div>
+                  </div>
+                </div>
+
+                {/* Project Management Settings */}
+                <div className="bg-white p-4 rounded-lg border">
+                  <h4 className="font-semibold text-gray-900 mb-3">
+                    Project Management
+                  </h4>
+                  <div className="space-y-4">
+                    {/* Add New Project */}
+                    <div className="bg-green-50 border border-green-200 rounded p-3">
+                      <h5 className="font-medium text-green-800 mb-2">
+                        Add New Project
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input
+                          type="text"
+                          id="newProjectName"
+                          className="p-2 border rounded-md"
+                          placeholder="Project name"
+                        />
+                        <input
+                          type="text"
+                          id="newProjectDescription"
+                          className="p-2 border rounded-md"
+                          placeholder="Project description"
+                        />
+                        <button
+                          onClick={async () => {
+                            const nameInput = document.getElementById(
+                              "newProjectName",
+                            ) as HTMLInputElement;
+                            const descInput = document.getElementById(
+                              "newProjectDescription",
+                            ) as HTMLInputElement;
+
+                            const name = nameInput?.value?.trim();
+                            const description = descInput?.value?.trim();
+
+                            if (!name) {
+                              alert("Please enter a project name.");
+                              return;
+                            }
+
+                            try {
+                              // Try to save to database first
+                              const { error } = await supabase
+                                .from("projects")
+                                .insert({
+                                  name: name,
+                                  description: description || null,
+                                  status: "active",
+                                  created_at: new Date().toISOString(),
+                                });
+
+                              if (error) {
+                                console.error("Database error:", error);
+                                // Fallback to localStorage
+                                const existingProjects = JSON.parse(
+                                  localStorage.getItem("ngo_projects") || "[]",
+                                );
+                                const newProject = {
+                                  id: Date.now().toString(),
+                                  name: name,
+                                  description: description || "",
+                                  status: "active",
+                                  created_at: new Date().toISOString(),
+                                };
+                                existingProjects.push(newProject);
+                                localStorage.setItem(
+                                  "ngo_projects",
+                                  JSON.stringify(existingProjects),
+                                );
+                                alert(
+                                  `Project "${name}" added successfully (stored locally)!`,
+                                );
+                              } else {
+                                alert(
+                                  `Project "${name}" added successfully to database!`,
+                                );
+                              }
+
+                              // Clear form
+                              nameInput.value = "";
+                              descInput.value = "";
+
+                              // Refresh page to show updated list
+                              window.location.reload();
+                            } catch (error) {
+                              console.error("Error adding project:", error);
+                              alert("Error adding project. Please try again.");
+                            }
+                          }}
+                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                        >
+                          Add Project
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Current Projects List */}
+                    <ProjectsList supabase={supabase} />
                   </div>
                 </div>
 

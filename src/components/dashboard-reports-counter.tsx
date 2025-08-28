@@ -17,6 +17,8 @@ export default function DashboardReportsCounter({
   useEffect(() => {
     const countReports = async () => {
       try {
+        console.log("🔍 Starting report count process...");
+
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
@@ -54,58 +56,135 @@ export default function DashboardReportsCounter({
           localEnd: lastDayOfMonth.toLocaleString(),
         });
 
-        // Query database for reports in current month
-        const { data: reports, error: reportsError } = await supabase
-          .from("reports")
-          .select("id, name, generated_at, type")
-          .gte("generated_at", startDate)
-          .lte("generated_at", endDate)
-          .order("generated_at", { ascending: false });
+        let totalReportsCount = 0;
 
-        if (reportsError) {
-          console.error("❌ Database error fetching reports:", reportsError);
-          setReportsCount(0);
-          return;
+        // First, try to get reports from database
+        try {
+          const { data: dbReports, error: reportsError } = await supabase
+            .from("reports")
+            .select("id, name, generated_at, type")
+            .gte("generated_at", startDate)
+            .lte("generated_at", endDate)
+            .order("generated_at", { ascending: false });
+
+          if (!reportsError && dbReports) {
+            totalReportsCount += dbReports.length;
+            console.log("📊 Database reports found:", {
+              count: dbReports.length,
+              reports: dbReports.map((r) => ({
+                name: r.name,
+                type: r.type,
+                generated_at: r.generated_at,
+                local_date: new Date(r.generated_at).toLocaleString(),
+              })),
+            });
+          } else {
+            console.log("❌ Database error or no reports:", reportsError);
+          }
+        } catch (dbError) {
+          console.error("❌ Database connection error:", dbError);
         }
 
-        const reportCount = reports?.length || 0;
-        setReportsCount(reportCount);
+        // Also check localStorage for reports
+        try {
+          const localReports = JSON.parse(
+            localStorage.getItem("ngo_reports") || "[]",
+          );
+          if (localReports.length > 0) {
+            // Filter local reports for current month
+            const currentMonthLocalReports = localReports.filter(
+              (report: any) => {
+                const reportDate = new Date(report.generated_at);
+                return (
+                  reportDate >= firstDayOfMonth && reportDate <= lastDayOfMonth
+                );
+              },
+            );
+            totalReportsCount += currentMonthLocalReports.length;
+            console.log("📊 Local storage reports found:", {
+              total: localReports.length,
+              currentMonth: currentMonthLocalReports.length,
+              reports: currentMonthLocalReports.map((r: any) => ({
+                name: r.name,
+                type: r.type,
+                generated_at: r.generated_at,
+              })),
+            });
+          }
+        } catch (localError) {
+          console.error("❌ Error reading from localStorage:", localError);
+        }
 
-        console.log("📊 Reports found:", {
-          count: reportCount,
-          reports:
-            reports?.map((r) => ({
-              name: r.name,
-              type: r.type,
-              generated_at: r.generated_at,
-              local_date: new Date(r.generated_at).toLocaleString(),
-            })) || [],
-        });
+        console.log("📈 Final report count:", totalReportsCount);
+        setReportsCount(totalReportsCount);
 
-        // Also check if reports table exists and is accessible
-        if (reportCount === 0) {
+        // If no reports found, check if reports table exists at all
+        if (totalReportsCount === 0) {
           console.log(
             "⚠️ No reports found for current month. Checking table accessibility...",
           );
 
-          // Test if we can access the reports table at all
-          const { data: testData, error: testError } = await supabase
-            .from("reports")
-            .select("id")
-            .limit(1);
+          try {
+            // Test if we can access the reports table at all
+            const { data: testData, error: testError } = await supabase
+              .from("reports")
+              .select("id")
+              .limit(1);
 
-          if (testError) {
-            console.error("❌ Reports table not accessible:", testError);
-          } else {
-            console.log(
-              "✅ Reports table is accessible, but no reports found for current month",
-            );
-            console.log("📈 Total reports in database:", testData?.length || 0);
+            if (testError) {
+              console.error("❌ Reports table not accessible:", testError);
+              // If table doesn't exist, show a small count from localStorage
+              const allLocalReports = JSON.parse(
+                localStorage.getItem("ngo_reports") || "[]",
+              );
+              if (allLocalReports.length > 0) {
+                setReportsCount(allLocalReports.length);
+                console.log(
+                  "📊 Using total localStorage reports count:",
+                  allLocalReports.length,
+                );
+              }
+            } else {
+              console.log(
+                "✅ Reports table is accessible, but no reports found for current month",
+              );
+
+              // Get total count from database
+              const { data: allDbReports, error: allError } = await supabase
+                .from("reports")
+                .select("id")
+                .limit(100);
+
+              if (!allError && allDbReports) {
+                console.log(
+                  "📈 Total reports in database:",
+                  allDbReports.length,
+                );
+                if (allDbReports.length > 0) {
+                  setReportsCount(allDbReports.length);
+                }
+              }
+            }
+          } catch (testError) {
+            console.error("❌ Error testing reports table:", testError);
           }
         }
       } catch (error) {
         console.error("❌ Error counting reports:", error);
-        setReportsCount(0);
+        // Fallback to localStorage count
+        try {
+          const fallbackReports = JSON.parse(
+            localStorage.getItem("ngo_reports") || "[]",
+          );
+          setReportsCount(fallbackReports.length);
+          console.log(
+            "📊 Using fallback localStorage count:",
+            fallbackReports.length,
+          );
+        } catch (fallbackError) {
+          console.error("❌ Fallback also failed:", fallbackError);
+          setReportsCount(0);
+        }
       } finally {
         setLoading(false);
       }
@@ -115,14 +194,25 @@ export default function DashboardReportsCounter({
 
     // Listen for custom events when reports are generated
     const handleReportGenerated = () => {
-      console.log("Report generated event, recounting...");
-      setTimeout(countReports, 500); // Small delay to ensure database is updated
+      console.log("📢 Report generated event received, recounting...");
+      setTimeout(countReports, 1000); // Increased delay to ensure database is updated
     };
 
     window.addEventListener("reportGenerated", handleReportGenerated);
 
+    // Also listen for storage events in case reports are added via localStorage
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "ngo_reports") {
+        console.log("📢 Storage change detected for reports, recounting...");
+        setTimeout(countReports, 500);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
     return () => {
       window.removeEventListener("reportGenerated", handleReportGenerated);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 

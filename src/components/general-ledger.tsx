@@ -1127,6 +1127,29 @@ export default function GeneralLedger({
     return { isValid: errors.length === 0, errors };
   };
 
+  const parseExcel = async (file: File): Promise<string[][]> => {
+    // For Excel files, we'll convert them to CSV format first
+    // This is a simplified approach - in production, you'd use a library like xlsx
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          // For now, we'll ask the user to save Excel as CSV
+          // In a real implementation, you'd use the xlsx library to parse Excel files
+          alert(
+            "Excel file detected. Please save your Excel file as CSV format and try again. " +
+              "This ensures better compatibility and data integrity.",
+          );
+          reject(new Error("Excel files need to be converted to CSV format"));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error("Failed to read Excel file"));
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
   const handleImportCSV = async () => {
     // Check permissions using the permission system
     if (!canManageLedgerSync()) {
@@ -1135,13 +1158,24 @@ export default function GeneralLedger({
     }
 
     if (!importFile) {
-      alert("Please select a CSV file to import.");
+      alert("Please select a CSV or Excel file to import.");
       return;
     }
 
     try {
-      const fileContent = await importFile.text();
-      const rows = parseCSV(fileContent);
+      let rows: string[][];
+
+      const fileName = importFile.name.toLowerCase();
+      const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+
+      if (isExcel) {
+        // Handle Excel files
+        rows = await parseExcel(importFile);
+      } else {
+        // Handle CSV files
+        const fileContent = await importFile.text();
+        rows = parseCSV(fileContent);
+      }
 
       if (rows.length === 0) {
         alert("The CSV file appears to be empty.");
@@ -1199,10 +1233,44 @@ export default function GeneralLedger({
         }
       });
 
-      // Import valid entries
+      // Import valid entries - APPEND to existing entries, don't replace
       if (validEntries.length > 0) {
+        console.log(
+          `Appending ${validEntries.length} new entries to existing ${ledgerEntries.length} entries`,
+        );
         const updatedEntries = [...ledgerEntries, ...validEntries];
-        saveLedgerEntries(updatedEntries);
+
+        // Try to save to database first
+        try {
+          const { error } = await supabase.from("ledger_entries").insert(
+            validEntries.map((entry) => ({
+              account_code: entry.account_code,
+              account_name: entry.account_name,
+              date: entry.date,
+              description: entry.description,
+              debit: entry.debit,
+              credit: entry.credit,
+              reference_number: entry.reference_number || null,
+              created_by: "Imported",
+            })),
+          );
+
+          if (error) {
+            console.error("Database insertion error:", error);
+            // Fallback to local state update
+            saveLedgerEntries(updatedEntries);
+            console.log("Entries saved to local state as fallback");
+          } else {
+            console.log("Entries successfully saved to database");
+            // Refresh from database to get the latest data
+            await fetchLedgerEntries();
+          }
+        } catch (dbError) {
+          console.error("Database operation failed:", dbError);
+          // Fallback to local state update
+          saveLedgerEntries(updatedEntries);
+          console.log("Entries saved to local state as fallback");
+        }
       }
 
       // Set import results
@@ -1225,11 +1293,17 @@ export default function GeneralLedger({
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (
-        file.type !== "text/csv" &&
-        !file.name.toLowerCase().endsWith(".csv")
-      ) {
-        alert("Please select a CSV file.");
+      const fileName = file.name.toLowerCase();
+      const isCSV = file.type === "text/csv" || fileName.endsWith(".csv");
+      const isExcel =
+        file.type ===
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.type === "application/vnd.ms-excel" ||
+        fileName.endsWith(".xlsx") ||
+        fileName.endsWith(".xls");
+
+      if (!isCSV && !isExcel) {
+        alert("Please select a CSV or Excel file (.csv, .xlsx, .xls).");
         return;
       }
       setImportFile(file);
