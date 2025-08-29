@@ -150,279 +150,348 @@ export default function GeneralLedger({
 
   const supabase = createClient();
 
-  // Initialize chart of accounts
-  const initializeChartOfAccounts = () => {
-    const defaultAccounts: AccountType[] = [
-      // Assets
-      {
-        code: "1000",
-        name: "Cash - General Fund",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1010",
-        name: "Cash - Restricted Fund",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1100",
-        name: "Accounts Receivable",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1200",
-        name: "Grants Receivable",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1500",
-        name: "Equipment",
-        type: "asset",
-        normal_balance: "debit",
-      },
-      {
-        code: "1600",
-        name: "Accumulated Depreciation",
-        type: "asset",
-        normal_balance: "credit",
-      },
+  // Initialize chart of accounts from database
+  const initializeChartOfAccounts = async () => {
+    try {
+      // Try to fetch from database first
+      const { data: dbAccounts, error } = await supabase
+        .from("chart_of_accounts")
+        .select("*")
+        .order("code");
 
-      // Liabilities
-      {
-        code: "2000",
-        name: "Accounts Payable",
-        type: "liability",
-        normal_balance: "credit",
-      },
-      {
-        code: "2100",
-        name: "Accrued Expenses",
-        type: "liability",
-        normal_balance: "credit",
-      },
-      {
-        code: "2200",
-        name: "Deferred Revenue",
-        type: "liability",
-        normal_balance: "credit",
-      },
+      if (!error && dbAccounts && dbAccounts.length > 0) {
+        console.log(`Loaded ${dbAccounts.length} accounts from database`);
+        setChartOfAccounts(dbAccounts);
+        return;
+      }
 
-      // Net Assets/Equity
-      {
-        code: "3000",
-        name: "Net Assets - Unrestricted",
-        type: "equity",
-        normal_balance: "credit",
-      },
-      {
-        code: "3100",
-        name: "Net Assets - Temporarily Restricted",
-        type: "equity",
-        normal_balance: "credit",
-      },
-      {
-        code: "3200",
-        name: "Net Assets - Permanently Restricted",
-        type: "equity",
-        normal_balance: "credit",
-      },
+      console.log("No accounts found in database, using default accounts");
 
-      // Revenue
-      {
-        code: "4000",
-        name: "Donations - Unrestricted",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4100",
-        name: "Donations - Restricted",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4200",
-        name: "Grant Revenue",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4300",
-        name: "Program Service Revenue",
-        type: "revenue",
-        normal_balance: "credit",
-      },
-      {
-        code: "4400",
-        name: "Investment Income",
-        type: "revenue",
-        normal_balance: "credit",
-      },
+      // Default accounts for NGO
+      const defaultAccounts: AccountType[] = [
+        // Assets
+        {
+          code: "1000",
+          name: "Cash - General Fund",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1010",
+          name: "Cash - Restricted Fund",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1100",
+          name: "Accounts Receivable",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1200",
+          name: "Grants Receivable",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1500",
+          name: "Equipment",
+          type: "asset",
+          normal_balance: "debit",
+        },
+        {
+          code: "1600",
+          name: "Accumulated Depreciation",
+          type: "asset",
+          normal_balance: "credit",
+        },
 
-      // Expenses
-      {
-        code: "5000",
-        name: "Program Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5100",
-        name: "Personnel Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5200",
-        name: "Administrative Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5300",
-        name: "Fundraising Expenses",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5400",
-        name: "Travel & Transportation",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5500",
-        name: "Equipment & Supplies",
-        type: "expense",
-        normal_balance: "debit",
-      },
-      {
-        code: "5600",
-        name: "Professional Services",
-        type: "expense",
-        normal_balance: "debit",
-      },
-    ];
+        // Liabilities
+        {
+          code: "2000",
+          name: "Accounts Payable",
+          type: "liability",
+          normal_balance: "credit",
+        },
+        {
+          code: "2100",
+          name: "Accrued Expenses",
+          type: "liability",
+          normal_balance: "credit",
+        },
+        {
+          code: "2200",
+          name: "Deferred Revenue",
+          type: "liability",
+          normal_balance: "credit",
+        },
 
-    // Load from localStorage if available
-    const savedAccounts = localStorage.getItem("ngo_chart_of_accounts");
-    if (savedAccounts) {
-      setChartOfAccounts(JSON.parse(savedAccounts));
-    } else {
+        // Net Assets/Equity
+        {
+          code: "3000",
+          name: "Net Assets - Unrestricted",
+          type: "equity",
+          normal_balance: "credit",
+        },
+        {
+          code: "3100",
+          name: "Net Assets - Temporarily Restricted",
+          type: "equity",
+          normal_balance: "credit",
+        },
+        {
+          code: "3200",
+          name: "Net Assets - Permanently Restricted",
+          type: "equity",
+          normal_balance: "credit",
+        },
+
+        // Revenue
+        {
+          code: "4000",
+          name: "Donations - Unrestricted",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4100",
+          name: "Donations - Restricted",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4200",
+          name: "Grant Revenue",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4300",
+          name: "Program Service Revenue",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+        {
+          code: "4400",
+          name: "Investment Income",
+          type: "revenue",
+          normal_balance: "credit",
+        },
+
+        // Expenses
+        {
+          code: "5000",
+          name: "Program Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5100",
+          name: "Personnel Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5200",
+          name: "Administrative Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5300",
+          name: "Fundraising Expenses",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5400",
+          name: "Travel & Transportation",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5500",
+          name: "Equipment & Supplies",
+          type: "expense",
+          normal_balance: "debit",
+        },
+        {
+          code: "5600",
+          name: "Professional Services",
+          type: "expense",
+          normal_balance: "debit",
+        },
+      ];
+
       setChartOfAccounts(defaultAccounts);
-      localStorage.setItem(
-        "ngo_chart_of_accounts",
-        JSON.stringify(defaultAccounts),
-      );
+
+      // Try to seed the database with default accounts
+      try {
+        const { error: insertError } = await supabase
+          .from("chart_of_accounts")
+          .insert(defaultAccounts);
+
+        if (!insertError) {
+          console.log("Successfully seeded chart of accounts in database");
+        }
+      } catch (seedError) {
+        console.log(
+          "Could not seed database with default accounts:",
+          seedError,
+        );
+      }
+    } catch (error) {
+      console.error("Error initializing chart of accounts:", error);
+      // Fallback to empty array if everything fails
+      setChartOfAccounts([]);
     }
   };
 
   useEffect(() => {
-    initializeChartOfAccounts();
-    fetchLedgerEntries();
-    loadCustomAccountTypes();
+    const initializeData = async () => {
+      setLoading(true);
+      await initializeChartOfAccounts();
+      await fetchLedgerEntries();
+      await loadCustomAccountTypes();
+      setLoading(false);
+    };
+
+    initializeData();
   }, []);
 
   const fetchLedgerEntries = async () => {
     try {
-      // For now, we'll use localStorage to simulate database storage
-      const savedEntries = localStorage.getItem("ngo_ledger_entries");
-      if (savedEntries) {
-        setLedgerEntries(JSON.parse(savedEntries));
+      console.log("Fetching ledger entries from database...");
+
+      // Try to fetch from database first
+      const { data: dbEntries, error } = await supabase
+        .from("ledger_entries")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Database fetch error:", error);
+        console.error("Error details:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+
+        // Check if it's a table not found error
+        if (error.code === "42P01") {
+          console.warn(
+            "ledger_entries table does not exist, using sample data",
+          );
+        } else {
+          console.warn(
+            "Database error occurred, using sample data as fallback",
+          );
+        }
+      } else if (dbEntries && dbEntries.length > 0) {
+        console.log(`Loaded ${dbEntries.length} ledger entries from database`);
+        setLedgerEntries(dbEntries);
+        return;
       } else {
-        // Initialize with some sample data
-        const sampleEntries: LedgerEntry[] = [
-          {
-            id: "1",
-            account_code: "1000",
-            account_name: "Cash - General Fund",
-            date: "2024-01-15",
-            description: "Initial donation received",
-            debit: 10000,
-            credit: 0,
-            reference_number: "DON-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: "2",
-            account_code: "4000",
-            account_name: "Donations - Unrestricted",
-            date: "2024-01-15",
-            description: "Initial donation received",
-            debit: 0,
-            credit: 10000,
-            reference_number: "DON-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: "3",
-            account_code: "5000",
-            account_name: "Program Expenses",
-            date: "2024-01-20",
-            description: "Educational materials purchase",
-            debit: 2500,
-            credit: 0,
-            reference_number: "EXP-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: "4",
-            account_code: "1000",
-            account_name: "Cash - General Fund",
-            date: "2024-01-20",
-            description: "Educational materials purchase",
-            debit: 0,
-            credit: 2500,
-            reference_number: "EXP-001",
-            created_by: "Admin",
-            created_at: new Date().toISOString(),
-          },
-        ];
-        setLedgerEntries(sampleEntries);
-        localStorage.setItem(
-          "ngo_ledger_entries",
-          JSON.stringify(sampleEntries),
-        );
+        console.log("No ledger entries found in database, using sample data");
       }
+
+      // Sample entries for demonstration
+      const sampleEntries: LedgerEntry[] = [
+        {
+          id: "sample_1",
+          account_code: "1000",
+          account_name: "Cash - General Fund",
+          date: "2024-01-15",
+          description: "Initial donation received",
+          debit: 10000,
+          credit: 0,
+          reference_number: "DON-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "sample_2",
+          account_code: "4000",
+          account_name: "Donations - Unrestricted",
+          date: "2024-01-15",
+          description: "Initial donation received",
+          debit: 0,
+          credit: 10000,
+          reference_number: "DON-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "sample_3",
+          account_code: "5000",
+          account_name: "Program Expenses",
+          date: "2024-01-20",
+          description: "Educational materials purchase",
+          debit: 2500,
+          credit: 0,
+          reference_number: "EXP-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "sample_4",
+          account_code: "1000",
+          account_name: "Cash - General Fund",
+          date: "2024-01-20",
+          description: "Educational materials purchase",
+          debit: 0,
+          credit: 2500,
+          reference_number: "EXP-001",
+          created_by: "Admin",
+          created_at: new Date().toISOString(),
+        },
+      ];
+
+      setLedgerEntries(sampleEntries);
     } catch (error) {
       console.error("Error fetching ledger entries:", error);
       setLedgerEntries([]);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const saveLedgerEntries = (entries: LedgerEntry[]) => {
+  const saveLedgerEntries = async (entries: LedgerEntry[]) => {
     setLedgerEntries(entries);
-    localStorage.setItem("ngo_ledger_entries", JSON.stringify(entries));
+    // This function is now only used for local state updates
+    // Individual database operations are handled in specific functions
   };
 
-  const saveChartOfAccounts = (accounts: AccountType[]) => {
+  const saveChartOfAccounts = async (accounts: AccountType[]) => {
     setChartOfAccounts(accounts);
-    localStorage.setItem("ngo_chart_of_accounts", JSON.stringify(accounts));
+    // No localStorage usage - data should be saved to database through individual operations
   };
 
-  const loadCustomAccountTypes = () => {
+  const loadCustomAccountTypes = async () => {
     try {
-      const savedTypes = localStorage.getItem("ngo_custom_account_types");
-      if (savedTypes) {
-        setCustomAccountTypes(JSON.parse(savedTypes));
+      console.log("Loading custom account types from database...");
+
+      const { data: customTypes, error } = await supabase
+        .from("custom_account_types")
+        .select("*")
+        .order("name");
+
+      if (!error && customTypes) {
+        console.log(`Loaded ${customTypes.length} custom account types`);
+        setCustomAccountTypes(customTypes);
+      } else {
+        console.log("No custom account types found");
+        setCustomAccountTypes([]);
       }
     } catch (error) {
       console.error("Error loading custom account types:", error);
+      setCustomAccountTypes([]);
     }
   };
 
-  const saveCustomAccountTypes = (types: any[]) => {
+  const saveCustomAccountTypes = async (types: any[]) => {
     setCustomAccountTypes(types);
-    localStorage.setItem("ngo_custom_account_types", JSON.stringify(types));
+    // Individual custom account types should be saved through specific database operations
   };
 
   const handleAddAccountType = () => {
@@ -457,7 +526,7 @@ export default function GeneralLedger({
     );
   };
 
-  const handleAddAccount = () => {
+  const handleAddAccount = async () => {
     // Check permissions using the permission system - only admin can add accounts
     if (!canManageSettingsSync()) {
       alert(
@@ -477,26 +546,51 @@ export default function GeneralLedger({
       return;
     }
 
-    const account: AccountType = {
-      code: newAccount.code,
-      name: newAccount.name,
-      type: newAccount.type,
-      normal_balance: newAccount.normal_balance,
-    };
+    try {
+      const account: AccountType = {
+        code: newAccount.code,
+        name: newAccount.name,
+        type: newAccount.type,
+        normal_balance: newAccount.normal_balance,
+      };
 
-    const newAccounts = [...chartOfAccounts, account].sort((a, b) =>
-      a.code.localeCompare(b.code),
-    );
-    saveChartOfAccounts(newAccounts);
+      console.log("Attempting to save new account to database:", account);
 
-    // Reset form
-    setNewAccount({
-      code: "",
-      name: "",
-      type: "asset",
-      normal_balance: "debit",
-    });
-    setShowAddAccountDialog(false);
+      // Try to save to database
+      const { data, error } = await supabase
+        .from("chart_of_accounts")
+        .insert([account])
+        .select();
+
+      if (error) {
+        console.error("Database account insertion error:", error);
+        // Fallback to local state update
+        const newAccounts = [...chartOfAccounts, account].sort((a, b) =>
+          a.code.localeCompare(b.code),
+        );
+        setChartOfAccounts(newAccounts);
+        alert(
+          `Account added locally. Database save failed: ${error.message}. Please check your database connection.`,
+        );
+      } else {
+        console.log("Successfully saved account to database:", data);
+        // Refresh from database to get the latest data
+        await initializeChartOfAccounts();
+        alert("Account added successfully to database!");
+      }
+
+      // Reset form
+      setNewAccount({
+        code: "",
+        name: "",
+        type: "asset",
+        normal_balance: "debit",
+      });
+      setShowAddAccountDialog(false);
+    } catch (error) {
+      console.error("Error adding account:", error);
+      alert("Failed to add account. Please try again.");
+    }
   };
 
   // Calculate batch totals
@@ -577,7 +671,9 @@ export default function GeneralLedger({
   };
 
   // Submit batch entries
-  const handleSubmitBatch = () => {
+  const handleSubmitBatch = async () => {
+    console.log("Starting batch submission process...");
+
     // Check permissions using the permission system
     if (!canManageLedgerSync()) {
       alert("You don't have permission to add ledger entries.");
@@ -620,54 +716,178 @@ export default function GeneralLedger({
       return;
     }
 
-    // Convert batch entries to ledger entries
-    const newLedgerEntries = batchEntries.map((entry) => {
-      const selectedAccount = chartOfAccounts.find(
-        (acc) => acc.code === entry.account_code,
+    try {
+      console.log("Getting current user...");
+      // Get current user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        console.error("Error getting user:", userError);
+      }
+
+      console.log("Current user:", user?.id || "No user found");
+
+      // Prepare entries for database insertion
+      const entriesForDB = batchEntries.map((entry, index) => {
+        console.log(`Processing entry ${index + 1}:`, entry);
+
+        const selectedAccount = chartOfAccounts.find(
+          (acc) => acc.code === entry.account_code,
+        );
+
+        const debitAmount = parseFloat(entry.debit) || 0;
+        const creditAmount = parseFloat(entry.credit) || 0;
+
+        // Validate the entry data
+        if (!entry.account_code || !entry.description) {
+          throw new Error(
+            `Entry ${index + 1}: Missing account_code or description`,
+          );
+        }
+
+        if (isNaN(debitAmount) || isNaN(creditAmount)) {
+          throw new Error(
+            `Entry ${index + 1}: Invalid debit or credit amounts`,
+          );
+        }
+
+        const processedEntry = {
+          account_code: entry.account_code.trim(),
+          account_name: (
+            selectedAccount?.name ||
+            entry.account_name ||
+            "Unknown Account"
+          ).trim(),
+          date: batchDate,
+          description: entry.description.trim(),
+          debit: debitAmount,
+          credit: creditAmount,
+          reference_number: entry.reference_number?.trim() || null,
+          created_by: user?.id || null,
+        };
+
+        console.log(`Processed entry ${index + 1}:`, processedEntry);
+        return processedEntry;
+      });
+
+      console.log(
+        "All entries processed for database insertion:",
+        entriesForDB,
       );
 
-      return {
-        id: `batch_${Date.now()}_${entry.id}`,
-        account_code: entry.account_code,
-        account_name: selectedAccount?.name || entry.account_name,
-        date: batchDate,
-        description: entry.description,
-        debit: parseFloat(entry.debit) || 0,
-        credit: parseFloat(entry.credit) || 0,
-        reference_number: entry.reference_number || undefined,
-        created_by: "Current User",
-        created_at: new Date().toISOString(),
-      };
-    });
+      // Test database connection first
+      console.log("Testing database connection...");
+      try {
+        const { data: testData, error: testError } = await supabase
+          .from("ledger_entries")
+          .select("id")
+          .limit(1);
 
-    // Add to ledger
-    const updatedEntries = [...ledgerEntries, ...newLedgerEntries];
-    saveLedgerEntries(updatedEntries);
+        if (testError) {
+          console.error("Database connection test failed:", testError);
+          throw new Error(
+            `Database connection failed: ${testError.message || testError.code || "Unknown error"}`,
+          );
+        }
 
-    // Reset batch
-    setBatchEntries([]);
-    setBatchDate(new Date().toISOString().split("T")[0]);
-    setIsBalanced(false);
-    setForceSubmit(false);
-    setShowBatchAddDialog(false);
+        console.log("Database connection test successful");
+      } catch (connectionError) {
+        console.error("Database connection error:", connectionError);
+        alert(
+          `Cannot connect to database: ${connectionError.message || connectionError}. Please check your internet connection and database configuration.`,
+        );
+        return;
+      }
 
-    alert(
-      `Successfully added ${newLedgerEntries.length} entries to the general ledger!`,
-    );
+      // Try to save to database
+      console.log("Inserting entries into database...");
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .insert(entriesForDB)
+        .select();
+
+      if (error) {
+        console.error("Database batch insertion error:", error);
+        console.error("Error details:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+
+        let errorMessage = "Unknown database error";
+        if (error.message) {
+          errorMessage = error.message;
+        } else if (error.code) {
+          errorMessage = `Database error code: ${error.code}`;
+        }
+
+        // Check for common error types
+        if (error.code === "42P01") {
+          errorMessage =
+            "Table 'ledger_entries' does not exist. Please check your database schema.";
+        } else if (error.code === "42703") {
+          errorMessage =
+            "One or more columns do not exist in the ledger_entries table. Please check your database schema.";
+        } else if (error.code === "23505") {
+          errorMessage =
+            "Duplicate entry detected. Please check for unique constraints.";
+        } else if (error.code === "23502") {
+          errorMessage =
+            "Required field is missing. Please check that all required fields are provided.";
+        }
+
+        alert(
+          `Failed to save entries to database: ${errorMessage}\n\nTechnical details:\nCode: ${error.code || "N/A"}\nDetails: ${error.details || "N/A"}\nHint: ${error.hint || "N/A"}`,
+        );
+        return;
+      }
+
+      console.log("Successfully saved batch entries to database:", data);
+
+      // Refresh from database to get the latest data
+      console.log("Refreshing ledger entries from database...");
+      await fetchLedgerEntries();
+
+      // Reset batch
+      setBatchEntries([]);
+      setBatchDate(new Date().toISOString().split("T")[0]);
+      setIsBalanced(false);
+      setForceSubmit(false);
+      setShowBatchAddDialog(false);
+
+      alert(
+        `Successfully added ${entriesForDB.length} entries to the general ledger and saved to database!`,
+      );
+    } catch (error) {
+      console.error("Error in batch submission process:", error);
+      alert(
+        `Failed to save batch entries: ${error.message || error}. Please try again.`,
+      );
+    }
   };
 
-  const handleAddEntry = () => {
+  const handleAddEntry = async () => {
+    console.log("Starting single entry submission process...");
+
     // Check permissions using the permission system
     if (!canManageLedgerSync()) {
       alert("You don't have permission to add ledger entries.");
       return;
     }
 
+    // Validate required fields
     if (
       !newEntry.account_code ||
       !newEntry.description ||
       (!newEntry.debit && !newEntry.credit)
     ) {
+      alert(
+        "Please fill in all required fields: Account, Description, and either Debit or Credit amount.",
+      );
       return;
     }
 
@@ -680,37 +900,147 @@ export default function GeneralLedger({
       return;
     }
 
+    // Ensure at least one amount is greater than 0
+    if (debitAmount === 0 && creditAmount === 0) {
+      alert("Please enter a debit or credit amount greater than 0.");
+      return;
+    }
+
     const selectedAccount = chartOfAccounts.find(
       (acc) => acc.code === newEntry.account_code,
     );
 
-    const entry: LedgerEntry = {
-      id: Date.now().toString(),
-      account_code: newEntry.account_code,
-      account_name: selectedAccount?.name || newEntry.account_name,
-      date: newEntry.date,
-      description: newEntry.description,
-      debit: debitAmount,
-      credit: creditAmount,
-      reference_number: newEntry.reference_number || undefined,
-      created_by: "Current User",
-      created_at: new Date().toISOString(),
-    };
+    try {
+      console.log("Getting current user...");
+      // Get current user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    const newEntries = [...ledgerEntries, entry];
-    saveLedgerEntries(newEntries);
+      if (userError) {
+        console.error("Error getting user:", userError);
+      }
 
-    // Reset form
-    setNewEntry({
-      account_code: "",
-      account_name: "",
-      date: new Date().toISOString().split("T")[0],
-      description: "",
-      debit: "",
-      credit: "",
-      reference_number: "",
-    });
-    setShowAddDialog(false);
+      console.log("Current user:", user?.id || "No user found");
+
+      // Prepare entry for database insertion
+      const entryForDB = {
+        account_code: newEntry.account_code.trim(),
+        account_name: (
+          selectedAccount?.name ||
+          newEntry.account_name ||
+          "Unknown Account"
+        ).trim(),
+        date: newEntry.date,
+        description: newEntry.description.trim(),
+        debit: debitAmount,
+        credit: creditAmount,
+        reference_number: newEntry.reference_number?.trim() || null,
+        created_by: user?.id || null,
+      };
+
+      console.log("Attempting to save ledger entry:", entryForDB);
+
+      // Test database connection first
+      console.log("Testing database connection...");
+      try {
+        const { data: testData, error: testError } = await supabase
+          .from("ledger_entries")
+          .select("id")
+          .limit(1);
+
+        if (testError) {
+          console.error("Database connection test failed:", testError);
+          throw new Error(
+            `Database connection failed: ${testError.message || testError.code || "Unknown error"}`,
+          );
+        }
+
+        console.log("Database connection test successful");
+      } catch (connectionError) {
+        console.error("Database connection error:", connectionError);
+        alert(
+          `Cannot connect to database: ${connectionError.message || connectionError}. Please check your internet connection and database configuration.`,
+        );
+        return;
+      }
+
+      // Try to save to database
+      console.log("Inserting entry into database...");
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .insert([entryForDB])
+        .select();
+
+      if (error) {
+        console.error("Database insertion error:", error);
+        console.error("Error details:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+
+        let errorMessage = "Unknown database error";
+        if (error.message) {
+          errorMessage = error.message;
+        } else if (error.code) {
+          errorMessage = `Database error code: ${error.code}`;
+        }
+
+        // Check for common error types
+        if (error.code === "42P01") {
+          errorMessage =
+            "Table 'ledger_entries' does not exist. Please check your database schema.";
+        } else if (error.code === "42703") {
+          errorMessage =
+            "One or more columns do not exist in the ledger_entries table. Please check your database schema.";
+        } else if (error.code === "23505") {
+          errorMessage =
+            "Duplicate entry detected. Please check for unique constraints.";
+        } else if (error.code === "23502") {
+          errorMessage =
+            "Required field is missing. Please check that all required fields are provided.";
+        }
+
+        // Add to local state as fallback
+        const entryWithId = {
+          ...entryForDB,
+          id: `local_${Date.now()}`,
+          created_at: new Date().toISOString(),
+        };
+        const newEntries = [...ledgerEntries, entryWithId];
+        setLedgerEntries(newEntries);
+
+        alert(
+          `Entry added locally but database save failed: ${errorMessage}\n\nTechnical details:\nCode: ${error.code || "N/A"}\nDetails: ${error.details || "N/A"}\nHint: ${error.hint || "N/A"}\n\nThe entry has been saved locally and will be available until you refresh the page.`,
+        );
+      } else {
+        console.log("Successfully saved to database:", data);
+        // Refresh from database to get the latest data
+        console.log("Refreshing ledger entries from database...");
+        await fetchLedgerEntries();
+        alert("Ledger entry added successfully to database!");
+      }
+
+      // Reset form
+      setNewEntry({
+        account_code: "",
+        account_name: "",
+        date: new Date().toISOString().split("T")[0],
+        description: "",
+        debit: "",
+        credit: "",
+        reference_number: "",
+      });
+      setShowAddDialog(false);
+    } catch (error) {
+      console.error("Error in single entry submission process:", error);
+      alert(
+        `Failed to add ledger entry: ${error.message || error}. Please try again.`,
+      );
+    }
   };
 
   const handleEditEntry = (entry: LedgerEntry) => {
@@ -723,7 +1053,7 @@ export default function GeneralLedger({
     setShowEditDialog(true);
   };
 
-  const handleUpdateEntry = () => {
+  const handleUpdateEntry = async () => {
     // Check permissions using the permission system
     if (!canEditLedgerSync()) {
       alert("You don't have permission to edit ledger entries.");
@@ -732,16 +1062,52 @@ export default function GeneralLedger({
 
     if (!editingEntry) return;
 
-    const updatedEntries = ledgerEntries.map((entry) =>
-      entry.id === editingEntry.id ? editingEntry : entry,
-    );
-    saveLedgerEntries(updatedEntries);
-    setShowEditDialog(false);
-    setEditingEntry(null);
-    alert("Ledger entry updated successfully!");
+    try {
+      console.log("Attempting to update ledger entry:", editingEntry);
+
+      // Prepare entry for database update
+      const entryForDB = {
+        account_code: editingEntry.account_code,
+        account_name: editingEntry.account_name,
+        date: editingEntry.date,
+        description: editingEntry.description,
+        debit: editingEntry.debit,
+        credit: editingEntry.credit,
+        reference_number: editingEntry.reference_number || null,
+      };
+
+      // Try to update in database
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .update(entryForDB)
+        .eq("id", editingEntry.id)
+        .select();
+
+      if (error) {
+        console.error("Database update error:", error);
+        const errorMessage =
+          error?.message || error?.code || "Unknown database error";
+        alert(
+          `Failed to update entry in database: ${errorMessage}. Please check your database connection and permissions.`,
+        );
+        return;
+      }
+
+      console.log("Successfully updated entry in database:", data);
+
+      // Refresh from database to get the latest data
+      await fetchLedgerEntries();
+
+      setShowEditDialog(false);
+      setEditingEntry(null);
+      alert("Ledger entry updated successfully in database!");
+    } catch (error) {
+      console.error("Error updating ledger entry:", error);
+      alert("Failed to update ledger entry. Please try again.");
+    }
   };
 
-  const handleDeleteEntry = (entryId: string) => {
+  const handleDeleteEntry = async (entryId: string) => {
     // Check permissions using the permission system
     if (!canDeleteLedgerSync()) {
       alert("You don't have permission to delete ledger entries.");
@@ -756,11 +1122,35 @@ export default function GeneralLedger({
       return;
     }
 
-    const updatedEntries = ledgerEntries.filter(
-      (entry) => entry.id !== entryId,
-    );
-    saveLedgerEntries(updatedEntries);
-    alert("Ledger entry deleted successfully!");
+    try {
+      console.log("Attempting to delete ledger entry:", entryId);
+
+      // Try to delete from database
+      const { error } = await supabase
+        .from("ledger_entries")
+        .delete()
+        .eq("id", entryId);
+
+      if (error) {
+        console.error("Database deletion error:", error);
+        const errorMessage =
+          error?.message || error?.code || "Unknown database error";
+        alert(
+          `Failed to delete entry from database: ${errorMessage}. Please check your database connection and permissions.`,
+        );
+        return;
+      }
+
+      console.log("Successfully deleted entry from database");
+
+      // Refresh from database to get the latest data
+      await fetchLedgerEntries();
+
+      alert("Ledger entry deleted successfully from database!");
+    } catch (error) {
+      console.error("Error deleting ledger entry:", error);
+      alert("Failed to delete ledger entry. Please try again.");
+    }
   };
 
   const getFilteredEntries = () => {
@@ -1025,6 +1415,29 @@ export default function GeneralLedger({
     return { isValid: errors.length === 0, errors };
   };
 
+  const parseExcel = async (file: File): Promise<string[][]> => {
+    // For Excel files, we'll convert them to CSV format first
+    // This is a simplified approach - in production, you'd use a library like xlsx
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          // For now, we'll ask the user to save Excel as CSV
+          // In a real implementation, you'd use the xlsx library to parse Excel files
+          alert(
+            "Excel file detected. Please save your Excel file as CSV format and try again. " +
+              "This ensures better compatibility and data integrity.",
+          );
+          reject(new Error("Excel files need to be converted to CSV format"));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error("Failed to read Excel file"));
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
   const handleImportCSV = async () => {
     // Check permissions using the permission system
     if (!canManageLedgerSync()) {
@@ -1033,13 +1446,24 @@ export default function GeneralLedger({
     }
 
     if (!importFile) {
-      alert("Please select a CSV file to import.");
+      alert("Please select a CSV or Excel file to import.");
       return;
     }
 
     try {
-      const fileContent = await importFile.text();
-      const rows = parseCSV(fileContent);
+      let rows: string[][];
+
+      const fileName = importFile.name.toLowerCase();
+      const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+
+      if (isExcel) {
+        // Handle Excel files
+        rows = await parseExcel(importFile);
+      } else {
+        // Handle CSV files
+        const fileContent = await importFile.text();
+        rows = parseCSV(fileContent);
+      }
 
       if (rows.length === 0) {
         alert("The CSV file appears to be empty.");
@@ -1097,10 +1521,44 @@ export default function GeneralLedger({
         }
       });
 
-      // Import valid entries
+      // Import valid entries - APPEND to existing entries, don't replace
       if (validEntries.length > 0) {
+        console.log(
+          `Appending ${validEntries.length} new entries to existing ${ledgerEntries.length} entries`,
+        );
         const updatedEntries = [...ledgerEntries, ...validEntries];
-        saveLedgerEntries(updatedEntries);
+
+        // Try to save to database first
+        try {
+          const { error } = await supabase.from("ledger_entries").insert(
+            validEntries.map((entry) => ({
+              account_code: entry.account_code,
+              account_name: entry.account_name,
+              date: entry.date,
+              description: entry.description,
+              debit: entry.debit,
+              credit: entry.credit,
+              reference_number: entry.reference_number || null,
+              created_by: "Imported",
+            })),
+          );
+
+          if (error) {
+            console.error("Database insertion error:", error);
+            // Fallback to local state update
+            saveLedgerEntries(updatedEntries);
+            console.log("Entries saved to local state as fallback");
+          } else {
+            console.log("Entries successfully saved to database");
+            // Refresh from database to get the latest data
+            await fetchLedgerEntries();
+          }
+        } catch (dbError) {
+          console.error("Database operation failed:", dbError);
+          // Fallback to local state update
+          saveLedgerEntries(updatedEntries);
+          console.log("Entries saved to local state as fallback");
+        }
       }
 
       // Set import results
@@ -1123,11 +1581,17 @@ export default function GeneralLedger({
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (
-        file.type !== "text/csv" &&
-        !file.name.toLowerCase().endsWith(".csv")
-      ) {
-        alert("Please select a CSV file.");
+      const fileName = file.name.toLowerCase();
+      const isCSV = file.type === "text/csv" || fileName.endsWith(".csv");
+      const isExcel =
+        file.type ===
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.type === "application/vnd.ms-excel" ||
+        fileName.endsWith(".xlsx") ||
+        fileName.endsWith(".xls");
+
+      if (!isCSV && !isExcel) {
+        alert("Please select a CSV or Excel file (.csv, .xlsx, .xls).");
         return;
       }
       setImportFile(file);
@@ -1158,7 +1622,13 @@ export default function GeneralLedger({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 bg-white">
-        <div className="text-gray-500">Loading general ledger...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="text-gray-500">Loading general ledger data...</div>
+          <div className="text-xs text-gray-400">
+            Fetching accounts and entries from database
+          </div>
+        </div>
       </div>
     );
   }
