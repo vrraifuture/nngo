@@ -91,7 +91,7 @@ const sanitizeInput = (input: string): string => {
 
 // Enhanced content validation
 const validateContent = (content: string, minLength: number = 100): boolean => {
-  return Boolean(content && content.trim().length >= minLength);
+  return content && content.trim().length >= minLength;
 };
 
 // Generate real data content for reports
@@ -165,47 +165,6 @@ const generateReportContent = async (
           content += `${i + 1}. ${expense.title} - FRw ${(expense.amount || 0).toLocaleString()} (${category}) - ${expense.expense_date} - ${expense.status}\n`;
         });
         content += `\n`;
-      }
-    } else if (report.type === "budget_variance") {
-      const { data: categories } = await supabase
-        .from("budget_categories")
-        .select("*");
-      const { data: expenses } = await supabase
-        .from("expenses")
-        .select("*, budget_categories(name)")
-        .in("status", ["approved", "paid"]);
-
-      content += `BUDGET VARIANCE REPORT\n======================\n\n`;
-
-      if (categories?.length && expenses?.length) {
-        let totalActual = 0;
-
-        content += `EXPENSE BREAKDOWN BY CATEGORY:\n`;
-        categories.forEach((category) => {
-          const categoryExpenses = expenses.filter(
-            (e) => e.budget_categories?.name === category.name,
-          );
-          const actualAmount = categoryExpenses.reduce(
-            (sum, e) => sum + (e.amount || 0),
-            0,
-          );
-          const expenseCount = categoryExpenses.length;
-
-          totalActual += actualAmount;
-
-          content += `- ${category.name}:\n`;
-          content += `  Total Expenses: FRw ${actualAmount.toLocaleString()}\n`;
-          content += `  Number of Transactions: ${expenseCount}\n`;
-          content += `  Average per Transaction: FRw ${expenseCount > 0 ? Math.round(actualAmount / expenseCount).toLocaleString() : "0"}\n\n`;
-        });
-
-        content += `SUMMARY:\n`;
-        content += `Total Categories: ${categories.length}\n`;
-        content += `Total Expenses: FRw ${totalActual.toLocaleString()}\n`;
-        content += `Total Transactions: ${expenses.length}\n`;
-        content += `Average per Category: FRw ${categories.length > 0 ? Math.round(totalActual / categories.length).toLocaleString() : "0"}\n\n`;
-      } else {
-        content += `No expense data available for budget variance analysis.\n\n`;
       }
     } else if (report.type === "donor_report") {
       const { data: fundSources } = await supabase
@@ -407,15 +366,6 @@ export default function ReportGeneration({
       type: "financial_summary",
       icon: <BarChart3 className="h-6 w-6" />,
       fields: ["dateRange", "projects", "includeCharts"],
-    },
-    {
-      id: "budget_variance",
-      name: "Budget Variance Report",
-      description:
-        "Compare actual expenses against budgeted amounts by category",
-      type: "budget_variance",
-      icon: <PieChart className="h-6 w-6" />,
-      fields: ["dateRange", "categories", "projects", "includeCharts"],
     },
     {
       id: "donor_report",
@@ -878,44 +828,6 @@ export default function ReportGeneration({
               ]);
             });
           }
-        } else if (report.type === "budget_variance") {
-          const { data: categories } = await supabase
-            .from("budget_categories")
-            .select("*");
-          const { data: expenses } = await supabase
-            .from("expenses")
-            .select("*, budget_categories(name)")
-            .in("status", ["approved", "paid"]);
-
-          if (categories?.length) {
-            csvContent.push([
-              "Category",
-              "Total Expenses (FRw)",
-              "Transaction Count",
-              "Average per Transaction (FRw)",
-            ]);
-            categories.forEach((category) => {
-              const categoryExpenses =
-                expenses?.filter(
-                  (e) => e.budget_categories?.name === category.name,
-                ) || [];
-              const totalAmount = categoryExpenses.reduce(
-                (sum, e) => sum + (e.amount || 0),
-                0,
-              );
-              const avgAmount =
-                categoryExpenses.length > 0
-                  ? Math.round(totalAmount / categoryExpenses.length)
-                  : 0;
-
-              csvContent.push([
-                category.name,
-                totalAmount.toLocaleString(),
-                categoryExpenses.length.toString(),
-                avgAmount.toLocaleString(),
-              ]);
-            });
-          }
         } else if (report.type === "donor_report") {
           const { data: fundSources } = await supabase
             .from("fund_sources")
@@ -1040,35 +952,6 @@ export default function ReportGeneration({
             <tr><td>Total Expenses</td><td>${totalExpenses.toLocaleString()}</td><td>Verified</td><td></td><td></td><td></td></tr>
             <tr><td>Balance</td><td>${(totalFunds - totalExpenses).toLocaleString()}</td><td>Available</td><td></td><td></td><td></td></tr>
           `;
-        } else if (report.type === "budget_variance") {
-          const { data: categories } = await supabase
-            .from("budget_categories")
-            .select("*");
-          const { data: expenses } = await supabase
-            .from("expenses")
-            .select("*, budget_categories(name)")
-            .in("status", ["approved", "paid"]);
-
-          excelContent += `<tr class="header"><td colspan="6"><b>Expense Analysis by Category</b></td></tr>
-            <tr><th>Category</th><th>Total Expenses (FRw)</th><th>Transaction Count</th><th>Average per Transaction (FRw)</th><th></th><th></th></tr>`;
-
-          categories?.forEach((category) => {
-            const categoryExpenses =
-              expenses?.filter(
-                (e) => e.budget_categories?.name === category.name,
-              ) || [];
-            const totalAmount = categoryExpenses.reduce(
-              (sum, e) => sum + (e.amount || 0),
-              0,
-            );
-            const avgAmount =
-              categoryExpenses.length > 0
-                ? Math.round(totalAmount / categoryExpenses.length)
-                : 0;
-
-            excelContent += `<tr><td>${category.name}</td><td>${totalAmount.toLocaleString()}</td>
-              <td>${categoryExpenses.length}</td><td>${avgAmount.toLocaleString()}</td><td></td><td></td></tr>`;
-          });
         } else if (report.type === "expense_report") {
           const { data: expenses } = await supabase
             .from("expenses")
