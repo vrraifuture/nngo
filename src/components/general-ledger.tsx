@@ -868,9 +868,9 @@ export default function GeneralLedger({
       );
     } catch (error) {
       console.error("Error in batch submission process:", error);
-      alert(
-        `Failed to save batch entries: ${error.message || error}. Please try again.`,
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(`Failed to save batch entries: ${errorMessage}. Please try again.`);
     }
   };
 
