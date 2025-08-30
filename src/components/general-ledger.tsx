@@ -1013,12 +1013,12 @@ export default function GeneralLedger({
         }
 
         // Add to local state as fallback
-        const entryWithId = {
+        const entryWithId: LedgerEntry = {
           ...entryForDB,
           id: `local_${Date.now()}`,
           created_at: new Date().toISOString(),
         };
-        const newEntries = [...ledgerEntries, entryWithId];
+        const newEntries: LedgerEntry[] = [...ledgerEntries, entryWithId];
         setLedgerEntries(newEntries);
 
         alert(
