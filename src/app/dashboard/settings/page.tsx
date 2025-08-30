@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Settings } from "lucide-react";
+import { Settings, User, Trash2 } from "lucide-react";
 import { createClient } from "../../../../supabase/client";
 import {
   getUserRoleSync,
@@ -18,6 +18,98 @@ import {
 } from "@/utils/permissions";
 import CurrencySettings from "@/components/currency-settings";
 import DashboardCurrencyUpdater from "@/components/dashboard-currency-updater";
+import { getUsersAction, deleteUserAction } from "@/app/actions";
+
+// UsersList component to display all system users
+function UsersList() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const result = await getUsersAction();
+      if (result.success) {
+        setUsers(result.users);
+      } else {
+        console.error("Error loading users:", result.error);
+      }
+    } catch (error) {
+      console.error("Error loading users:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`Are you sure you want to delete user ${userEmail}?`)) {
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("user_id", userId);
+      const result = await deleteUserAction(formData);
+
+      if (result.success) {
+        alert("User deleted successfully!");
+        loadUsers(); // Refresh the list
+      } else {
+        alert(`Error deleting user: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      alert("Error deleting user. Please try again.");
+    }
+  };
+
+  if (loading) {
+    return <div className="text-gray-500 text-sm">Loading users...</div>;
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="text-gray-500 text-sm">
+        No users found. Create users using the form above.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {users.map((user) => (
+        <div
+          key={user.id}
+          className="flex items-center justify-between p-3 bg-gray-50 rounded border"
+        >
+          <div className="flex items-center gap-3">
+            <User className="h-4 w-4 text-gray-400" />
+            <div>
+              <div className="font-medium text-sm">
+                {user.full_name || "No name"} ({user.email})
+              </div>
+              <div className="text-xs text-gray-500">
+                Created: {new Date(user.created_at).toLocaleDateString()}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleDeleteUser(user.id, user.email)}
+              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center gap-1"
+            >
+              <Trash2 className="h-3 w-3" />
+              Delete
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Export the client component directly
 export default function SettingsPage() {
@@ -116,7 +208,7 @@ function SettingsPageContent() {
 
         // Update permission states based on role
         const adminStatus = role === "admin";
-        const manageSettingsStatus = true; // Allow all users to manage settings
+        const manageSettingsStatus = role === "admin"; // Only admins can manage settings
 
         setIsAdmin(adminStatus);
         setHasManageSettings(manageSettingsStatus);
@@ -176,9 +268,10 @@ function SettingsPageContent() {
     </Card>
   );
 
-  // Allow all authenticated users to access settings (removed permission restrictions)
+  // Check if user can access settings - only admins
   const hasSettingsAccess = () => {
-    return true; // Allow everyone to access settings
+    // Only allow admin role to access settings
+    return userRole === "admin" || hasManageSettings;
   };
 
   if (loading) {
@@ -194,7 +287,22 @@ function SettingsPageContent() {
     );
   }
 
-  // Removed permission check - all users can access settings now
+  // Check if user has settings access
+  if (!hasSettingsAccess()) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <DashboardNavbar />
+        <main className="w-full">
+          <div className="container mx-auto px-4 py-8">
+            <RestrictedAccessCard
+              title="Settings Access Restricted"
+              description="You don't have permission to access system settings"
+            />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -374,24 +482,24 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                {/* Manual User Creation with PIN */}
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
+                {/* Manual User Creation with Password */}
+                <div className="bg-white p-4 rounded-lg border border-green-200">
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                      PIN LOGIN
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                      SECURE LOGIN
                     </span>
-                    Manual User Creation with PIN
+                    Manual User Creation with Password
                   </h4>
                   <p className="text-sm text-gray-600 mb-4">
-                    Create users manually and assign them a 4-digit PIN for
-                    immediate access. Users can login with their email and PIN
-                    instead of a password.
+                    Create users manually and assign them a secure password for
+                    immediate access. Users can login with their email and
+                    password.
                   </p>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
-                    <p className="text-sm text-yellow-800">
-                      <strong>Important:</strong> Users created with PIN can
-                      login using their email and 4-digit PIN on the sign-in
-                      page. They should enter their PIN in the password field.
+                  <div className="bg-green-50 border border-green-200 rounded p-3 mb-4">
+                    <p className="text-sm text-green-800">
+                      <strong>Security:</strong> Users created here will have
+                      secure password-based authentication. They can login using
+                      their email and password on the sign-in page.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -419,21 +527,14 @@ function SettingsPageContent() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
-                        4-Digit PIN *
+                        Password *
                       </label>
                       <input
                         type="password"
-                        id="manualUserPin"
+                        id="manualUserPassword"
                         className="w-full p-2 border rounded-md"
-                        placeholder="1234"
-                        maxLength={4}
-                        pattern="[0-9]{4}"
-                        onInput={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          target.value = target.value
-                            .replace(/[^0-9]/g, "")
-                            .slice(0, 4);
-                        }}
+                        placeholder="Enter secure password"
+                        minLength={6}
                       />
                     </div>
                     <div className="space-y-2">
@@ -463,8 +564,8 @@ function SettingsPageContent() {
                         const emailInput = document.getElementById(
                           "manualUserEmail",
                         ) as HTMLInputElement;
-                        const pinInput = document.getElementById(
-                          "manualUserPin",
+                        const passwordInput = document.getElementById(
+                          "manualUserPassword",
                         ) as HTMLInputElement;
                         const roleSelect = document.getElementById(
                           "manualUserRole",
@@ -472,10 +573,10 @@ function SettingsPageContent() {
 
                         const name = nameInput?.value?.trim();
                         const email = emailInput?.value?.trim();
-                        const pin = pinInput?.value?.trim();
+                        const password = passwordInput?.value?.trim();
                         const role = roleSelect?.value;
 
-                        if (!name || !email || !pin || !role) {
+                        if (!name || !email || !password || !role) {
                           alert("Please fill in all fields.");
                           return;
                         }
@@ -485,64 +586,50 @@ function SettingsPageContent() {
                           return;
                         }
 
-                        if (pin.length !== 4 || !/^[0-9]{4}$/.test(pin)) {
-                          alert("PIN must be exactly 4 digits.");
+                        if (password.length < 6) {
+                          alert("Password must be at least 6 characters long.");
                           return;
                         }
 
-                        try {
-                          // Store manual users in localStorage
-                          const existingUsers = JSON.parse(
-                            localStorage.getItem("ngo_manual_users") || "[]",
-                          );
+                        (async () => {
+                          try {
+                            // Create user using the server action instead of localStorage
+                            const formData = new FormData();
+                            formData.append("email", email);
+                            formData.append("password", password);
+                            formData.append("full_name", name);
+                            formData.append("role", role);
 
-                          // Check if user already exists
-                          if (
-                            existingUsers.find(
-                              (user: any) => user.email === email,
-                            )
-                          ) {
-                            alert("User with this email already exists.");
-                            return;
+                            const { createUserAction } = await import(
+                              "@/app/actions"
+                            );
+                            const result = await createUserAction(formData);
+
+                            if (result.success) {
+                              alert(
+                                `User ${name} created successfully!\n\nLogin Instructions:\n• Email: ${email}\n• Password: [Password set]\n• Role: ${role}\n\nThe user can now login with their email and password on the sign-in page.\n\nPlease share these credentials securely with the user.`,
+                              );
+
+                              // Clear form
+                              nameInput.value = "";
+                              emailInput.value = "";
+                              passwordInput.value = "";
+                              roleSelect.value = "";
+
+                              // Refresh to show updated user list
+                              window.location.reload();
+                            } else {
+                              alert(`Error creating user: ${result.error}`);
+                            }
+                          } catch (error) {
+                            console.error("Error creating user:", error);
+                            alert("Error creating user. Please try again.");
                           }
-
-                          const newUser = {
-                            id: Date.now().toString(),
-                            name: name,
-                            email: email,
-                            pin: pin, // In production, this should be hashed
-                            role: role,
-                            status: "active",
-                            created_at: new Date().toISOString(),
-                            created_by: userRole,
-                          };
-
-                          existingUsers.push(newUser);
-                          localStorage.setItem(
-                            "ngo_manual_users",
-                            JSON.stringify(existingUsers),
-                          );
-
-                          alert(
-                            `User ${name} created successfully!\n\nLogin Instructions:\n• Email: ${email}\n• PIN: ${pin}\n• Role: ${role}\n\nTo login: Use email and enter PIN in the password field on the sign-in page.\n\nPlease share these credentials securely with the user.`,
-                          );
-
-                          // Clear form
-                          nameInput.value = "";
-                          emailInput.value = "";
-                          pinInput.value = "";
-                          roleSelect.value = "";
-
-                          // Refresh to show updated user list
-                          window.location.reload();
-                        } catch (error) {
-                          console.error("Error creating manual user:", error);
-                          alert("Error creating user. Please try again.");
-                        }
+                        })();
                       }}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                      className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
                     >
-                      Create User with PIN
+                      Create User with Password
                     </button>
                   </div>
                 </div>
@@ -629,94 +716,37 @@ function SettingsPageContent() {
                 </div>
 
                 {/* Manual Users List */}
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
+                <div className="bg-white p-4 rounded-lg border border-green-200">
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                      PIN
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                      SECURE
                     </span>
-                    Manual Users (PIN Access)
+                    Created Users (Password Access)
                   </h4>
                   <div className="space-y-2">
-                    {(() => {
-                      try {
-                        const manualUsers = JSON.parse(
-                          localStorage.getItem("ngo_manual_users") || "[]",
-                        );
-                        if (manualUsers.length === 0) {
-                          return (
-                            <p className="text-gray-500 text-sm">
-                              No manual users created yet.
-                            </p>
-                          );
-                        }
-                        return manualUsers.map((user: any) => (
-                          <div
-                            key={user.id}
-                            className="flex items-center justify-between p-3 bg-blue-50 rounded border border-blue-200"
-                          >
-                            <div>
-                              <div className="font-medium text-sm">
-                                {user.name} ({user.email})
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                Role: {user.role} | PIN: ••••
-                                {user.pin.slice(-2)} | Status: {user.status} |
-                                Created:{" "}
-                                {new Date(user.created_at).toLocaleDateString()}
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  alert(
-                                    `User Login Details:\n\nName: ${user.name}\nEmail: ${user.email}\nPIN: ${user.pin}\nRole: ${user.role}\n\nLogin Instructions:\nUse email and enter PIN in the password field on the sign-in page.\n\nPlease share these credentials securely.`,
-                                  );
-                                }}
-                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                              >
-                                View PIN
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      `Remove user ${user.name} (${user.email})?`,
-                                    )
-                                  ) {
-                                    try {
-                                      const existingUsers = JSON.parse(
-                                        localStorage.getItem(
-                                          "ngo_manual_users",
-                                        ) || "[]",
-                                      );
-                                      const updatedUsers = existingUsers.filter(
-                                        (u: any) => u.id !== user.id,
-                                      );
-                                      localStorage.setItem(
-                                        "ngo_manual_users",
-                                        JSON.stringify(updatedUsers),
-                                      );
-                                      window.location.reload();
-                                    } catch (error) {
-                                      alert("Error removing user.");
-                                    }
-                                  }
-                                }}
-                                className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-                        ));
-                      } catch (error) {
-                        return (
-                          <p className="text-red-500 text-sm">
-                            Error loading manual users.
-                          </p>
-                        );
-                      }
-                    })()}
+                    <p className="text-gray-500 text-sm">
+                      Users created through this interface are now managed
+                      through the proper authentication system. They will appear
+                      in the main user management section below and can be
+                      managed there.
+                    </p>
+                    <div className="bg-green-50 border border-green-200 rounded p-3">
+                      <p className="text-sm text-green-800">
+                        <strong>Note:</strong> All users created here are now
+                        stored securely in the database and can login with their
+                        email and password on the sign-in page.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Database Users Management */}
+                <div className="bg-white p-4 rounded-lg border">
+                  <h4 className="font-semibold text-gray-900 mb-3">
+                    All System Users
+                  </h4>
+                  <div className="space-y-2">
+                    <UsersList />
                   </div>
                 </div>
 
@@ -805,13 +835,22 @@ function SettingsPageContent() {
                       </div>
                       <ul className="text-sm text-gray-600 space-y-1 ml-5">
                         <li>✅ View all financial data</li>
-                        <li>✅ Add new entries (expenses, budgets, etc.)</li>
+                        <li>
+                          ✅ Add new entries (expenses, budgets, fund sources)
+                        </li>
                         <li>❌ Cannot edit existing entries</li>
                         <li>❌ Cannot delete entries</li>
                         <li>❌ Cannot access settings</li>
                         <li>✅ Generate reports (view only)</li>
                         <li>❌ Cannot manage users</li>
                       </ul>
+                      <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2">
+                        <p className="text-xs text-blue-700">
+                          <strong>Fund Sources:</strong> Accountants can add new
+                          fund sources but will see "Add Only" in the actions
+                          column as they cannot edit or delete existing entries.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -949,6 +988,27 @@ function SettingsPageContent() {
                       className="px-3 py-2 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700"
                     >
                       Initialize Permissions
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { fixAccountantPermissions } = await import(
+                            "@/utils/fix-permissions"
+                          );
+                          await fixAccountantPermissions();
+                        } catch (error) {
+                          console.error(
+                            "Error fixing accountant permissions:",
+                            error,
+                          );
+                          alert(
+                            "Error fixing accountant permissions. Please try again.",
+                          );
+                        }
+                      }}
+                      className="px-3 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+                    >
+                      Fix Accountant Permissions
                     </button>
                     <button
                       onClick={async () => {

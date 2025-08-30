@@ -16,7 +16,20 @@ export const getUserRoleAction = async () => {
       return {
         success: false,
         error: "User not authenticated",
-        role: "admin", // Default fallback
+        role: "viewer", // Default fallback
+      };
+    }
+
+    // Check if user is super admin
+    const SUPER_ADMIN_EMAILS = ["abdousentore@gmail.com"];
+    const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(
+      user.email?.toLowerCase() || "",
+    );
+
+    if (isSuperAdmin) {
+      return {
+        success: true,
+        role: "admin",
       };
     }
 
@@ -31,20 +44,20 @@ export const getUserRoleAction = async () => {
       console.error("Error fetching user role:", error);
       return {
         success: true,
-        role: "admin", // Default fallback
+        role: "viewer", // Default fallback for security
       };
     }
 
     return {
       success: true,
-      role: userRole?.role || "admin",
+      role: userRole?.role || "viewer",
     };
   } catch (error) {
     console.error("Error in getUserRoleAction:", error);
     return {
       success: false,
       error: "Failed to get user role",
-      role: "admin",
+      role: "viewer",
     };
   }
 };
@@ -52,22 +65,14 @@ export const getUserRoleAction = async () => {
 // Server action to get role permissions
 export const getRolePermissionsAction = async () => {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return {
-        success: false,
-        error: "User not authenticated",
-        permissions: [],
-      };
-    }
+    // Use service role client to ensure we can read permissions
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!,
+    );
 
     // Get organization ID (for now, use the first organization)
-    const { data: organizations, error: orgError } = await supabase
+    const { data: organizations, error: orgError } = await serviceSupabase
       .from("organizations")
       .select("id")
       .limit(1)
@@ -83,7 +88,7 @@ export const getRolePermissionsAction = async () => {
     }
 
     // Get role permissions from database
-    const { data: permissions, error } = await supabase
+    const { data: permissions, error } = await serviceSupabase
       .from("role_permissions")
       .select(
         `
@@ -108,6 +113,7 @@ export const getRolePermissionsAction = async () => {
       };
     }
 
+    console.log(`Loaded ${permissions?.length || 0} role permissions`);
     return {
       success: true,
       permissions: permissions || [],
@@ -149,22 +155,35 @@ export const updateRolePermissionAction = async (formData: FormData) => {
       };
     }
 
-    // Check if user has permission to manage settings
-    const { data: userRole } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .single();
+    // Check if user has permission to manage settings (allow super admins)
+    const SUPER_ADMIN_EMAILS = ["abdousentore@gmail.com"];
+    const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(
+      user.email?.toLowerCase() || "",
+    );
 
-    if (userRole?.role !== "admin") {
-      return {
-        success: false,
-        error: "Insufficient permissions",
-      };
+    if (!isSuperAdmin) {
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (userRole?.role !== "admin") {
+        return {
+          success: false,
+          error: "Insufficient permissions",
+        };
+      }
     }
 
+    // Use service role client for permission updates
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!,
+    );
+
     // Get organization ID
-    const { data: organizations, error: orgError } = await supabase
+    const { data: organizations, error: orgError } = await serviceSupabase
       .from("organizations")
       .select("id")
       .limit(1)
@@ -178,7 +197,7 @@ export const updateRolePermissionAction = async (formData: FormData) => {
     }
 
     // Update or insert the permission
-    const { error } = await supabase.from("role_permissions").upsert(
+    const { error } = await serviceSupabase.from("role_permissions").upsert(
       {
         organization_id: organizations.id,
         role: role,
@@ -199,6 +218,7 @@ export const updateRolePermissionAction = async (formData: FormData) => {
       };
     }
 
+    console.log(`Updated permission: ${role} - ${permissionId} = ${granted}`);
     return {
       success: true,
       message: "Permission updated successfully",
@@ -238,20 +258,6 @@ export const initializeDefaultPermissionsAction = async () => {
 
     const orgId = organizations.id;
 
-    // Check if permissions already exist
-    const { data: existingPermissions } = await serviceSupabase
-      .from("role_permissions")
-      .select("id")
-      .eq("organization_id", orgId)
-      .limit(1);
-
-    if (existingPermissions && existingPermissions.length > 0) {
-      return {
-        success: true,
-        message: "Permissions already initialized",
-      };
-    }
-
     // Get all available permissions
     const { data: allPermissions } = await serviceSupabase
       .from("permissions")
@@ -264,7 +270,7 @@ export const initializeDefaultPermissionsAction = async () => {
       };
     }
 
-    // Define role permissions
+    // Define role permissions - FIXED ACCOUNTANT PERMISSIONS
     const rolePermissions = [
       // Admin gets all permissions
       ...allPermissions.map((p) => ({
@@ -274,30 +280,49 @@ export const initializeDefaultPermissionsAction = async () => {
         granted: true,
       })),
 
-      // Accountant permissions
+      // Accountant permissions - LIMITED ACCESS
       ...[
         "view_finances",
-        "manage_expenses",
-        "edit_expenses",
-        "delete_expenses",
-        "manage_budgets",
-        "edit_budgets",
-        "delete_budgets",
+        "manage_expenses", // Can add expenses
+        "manage_budgets", // Can add budgets
         "view_ledger",
-        "manage_ledger",
-        "edit_ledger",
-        "delete_ledger",
+        "manage_ledger", // Can add ledger entries
         "view_projects",
         "view_donors",
         "view_reports",
         "generate_reports",
-        "edit_reports",
-        "delete_reports",
       ].map((permissionId) => ({
         organization_id: orgId,
         role: "accountant",
         permission_id: permissionId,
         granted: true,
+      })),
+      // Explicitly deny all other permissions for accountant
+      ...[
+        "edit_expenses",
+        "delete_expenses",
+        "edit_budgets",
+        "delete_budgets",
+        "edit_ledger",
+        "delete_ledger",
+        "manage_projects", // DENIED: Cannot manage projects
+        "edit_projects",
+        "delete_projects",
+        "manage_donors", // DENIED: Cannot manage donors
+        "edit_donors",
+        "delete_donors",
+        "edit_reports",
+        "delete_reports",
+        "manage_settings", // DENIED: Cannot access settings
+        "edit_settings",
+        "manage_users",
+        "edit_users",
+        "delete_users",
+      ].map((permissionId) => ({
+        organization_id: orgId,
+        role: "accountant",
+        permission_id: permissionId,
+        granted: false,
       })),
 
       // Project Manager permissions
@@ -327,7 +352,7 @@ export const initializeDefaultPermissionsAction = async () => {
       })),
     ];
 
-    // Insert permissions
+    // Insert permissions using upsert to handle existing permissions
     const { error } = await serviceSupabase
       .from("role_permissions")
       .upsert(rolePermissions, {
@@ -342,6 +367,7 @@ export const initializeDefaultPermissionsAction = async () => {
       };
     }
 
+    console.log(`Initialized ${rolePermissions.length} role permissions`);
     return {
       success: true,
       message: "Default permissions initialized successfully",

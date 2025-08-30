@@ -89,13 +89,83 @@ export const signInAction = async (formData: FormData) => {
   const { createActionClient } = await import("../../supabase/server");
   const supabase = await createActionClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
   if (error) {
-    return encodedRedirect("error", "/sign-in", error.message);
+    return encodedRedirect(
+      "error",
+      "/sign-in",
+      "Invalid login credentials. Please check your email and password.",
+    );
+  }
+
+  // After successful sign-in, ensure user has proper role assignment
+  if (data.user) {
+    try {
+      // Use service role to check/assign role if missing
+      const serviceSupabase = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!,
+      );
+
+      // Check if user has a role assigned
+      const { data: userRole } = await serviceSupabase
+        .from("user_roles")
+        .select("role, organization_id")
+        .eq("user_id", data.user.id)
+        .single();
+
+      if (!userRole) {
+        console.log(
+          "User has no role assigned, checking if admin or assigning default role",
+        );
+
+        // Check if user is a super admin
+        const SUPER_ADMIN_EMAILS = ["abdousentore@gmail.com"];
+        const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(
+          data.user.email?.toLowerCase() || "",
+        );
+
+        // Get organization ID
+        const { data: orgData } = await serviceSupabase
+          .from("organizations")
+          .select("id")
+          .limit(1)
+          .single();
+
+        if (orgData?.id) {
+          // Assign role based on whether user is super admin
+          const roleToAssign = isSuperAdmin ? "admin" : "accountant";
+
+          const { error: roleError } = await serviceSupabase
+            .from("user_roles")
+            .insert({
+              user_id: data.user.id,
+              organization_id: orgData.id,
+              role: roleToAssign,
+              created_at: new Date().toISOString(),
+            });
+
+          if (!roleError) {
+            console.log(
+              `Assigned ${roleToAssign} role to user ${data.user.email}`,
+            );
+          }
+        }
+      }
+
+      // Initialize permissions if they don't exist
+      const { initializeDefaultPermissionsAction } = await import(
+        "./actions/permissions"
+      );
+      await initializeDefaultPermissionsAction();
+    } catch (setupError) {
+      console.error("Error in post-signin setup:", setupError);
+      // Don't fail the sign-in process for setup errors
+    }
   }
 
   return redirect("/dashboard");
@@ -660,6 +730,13 @@ export const createUserAction = async (formData: FormData) => {
     };
   }
 
+  if (!role) {
+    return {
+      success: false,
+      error: "Role is required",
+    };
+  }
+
   try {
     console.log("Creating new user with server action:", {
       email,
@@ -673,20 +750,34 @@ export const createUserAction = async (formData: FormData) => {
       process.env.SUPABASE_SERVICE_KEY!,
     );
 
-    // First check if user already exists in the users table
-    const { data: existingUser } = await serviceSupabase
-      .from("users")
-      .select("id, email")
-      .eq("email", email)
-      .single();
+    // First check if user already exists in auth
+    const { data: existingAuthUser } =
+      await serviceSupabase.auth.admin.listUsers();
+    const userExists = existingAuthUser.users.some((u) => u.email === email);
 
-    if (existingUser) {
-      console.log("User already exists:", existingUser);
+    if (userExists) {
       return {
         success: false,
         error: "A user with this email address already exists",
       };
     }
+
+    // Get organization ID first (required for role assignment)
+    const { data: orgData, error: orgError } = await serviceSupabase
+      .from("organizations")
+      .select("id")
+      .limit(1)
+      .single();
+
+    if (orgError || !orgData?.id) {
+      console.error("No organization found:", orgError);
+      return {
+        success: false,
+        error: "Organization setup required. Please contact administrator.",
+      };
+    }
+
+    const orgId = orgData.id;
 
     // Create user with Supabase Auth using service role client
     const { data: authData, error: authError } =
@@ -701,23 +792,23 @@ export const createUserAction = async (formData: FormData) => {
 
     if (authError) {
       console.error("Error creating auth user:", authError);
-      // Handle specific error cases
-      if (authError.message.includes("already registered")) {
-        return {
-          success: false,
-          error: "A user with this email address already exists",
-        };
-      }
       return {
         success: false,
         error: "Failed to create user: " + authError.message,
       };
     }
 
-    if (authData.user) {
-      console.log("Auth user created:", authData.user.id);
+    if (!authData.user) {
+      return {
+        success: false,
+        error: "Failed to create user - no user data returned",
+      };
+    }
 
-      // Use upsert to handle potential duplicates gracefully
+    console.log("Auth user created:", authData.user.id);
+
+    try {
+      // Add user to users table
       const { data: userData, error: userError } = await serviceSupabase
         .from("users")
         .upsert(
@@ -739,12 +830,8 @@ export const createUserAction = async (formData: FormData) => {
 
       if (userError) {
         console.error("Error adding user to users table:", userError);
-        // If user creation in database fails, clean up the auth user
-        try {
-          await serviceSupabase.auth.admin.deleteUser(authData.user.id);
-        } catch (cleanupError) {
-          console.error("Error cleaning up auth user:", cleanupError);
-        }
+        // Clean up auth user if database insert fails
+        await serviceSupabase.auth.admin.deleteUser(authData.user.id);
         return {
           success: false,
           error: "Failed to add user to database: " + userError.message,
@@ -753,53 +840,76 @@ export const createUserAction = async (formData: FormData) => {
 
       console.log("User added to users table:", userData);
 
-      // Assign role if specified using service role
-      if (role) {
-        console.log("Assigning role to user:", {
-          userId: authData.user.id,
-          role,
-        });
+      // Assign role - this is critical for the user to function properly
+      console.log("Assigning role to user:", {
+        userId: authData.user.id,
+        role,
+        orgId,
+      });
 
-        // Use simple insert for role assignment since this is a new user
-        const { data: roleData, error: roleError } = await serviceSupabase
-          .from("user_roles")
-          .insert({
-            user_id: authData.user.id,
-            role: role,
-            created_at: new Date().toISOString(),
-          })
-          .select();
+      // Delete any existing roles first to prevent duplicates
+      await serviceSupabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", authData.user.id)
+        .eq("organization_id", orgId);
 
-        if (roleError) {
-          console.error("Error assigning role:", roleError);
-          console.error("Role error details:", roleError);
+      // Insert the new role
+      const { data: roleData, error: roleError } = await serviceSupabase
+        .from("user_roles")
+        .insert({
+          user_id: authData.user.id,
+          organization_id: orgId,
+          role: role,
+          created_at: new Date().toISOString(),
+        })
+        .select();
 
-          // If role assignment fails, we should still return success for user creation
-          // but inform about the role assignment failure
-          return {
-            success: true,
-            message: `User created successfully! However, role assignment failed: ${roleError.message}. Please assign the role manually in the settings.`,
-            userId: authData.user.id,
-            roleAssignmentFailed: true,
-          };
-        }
-
+      if (roleError) {
+        console.error("Error assigning role:", roleError);
+        // Don't fail the entire operation, but warn about role assignment
+        console.warn(
+          "Role assignment failed, but user was created successfully",
+        );
+      } else {
         console.log("Role assigned successfully:", roleData);
+      }
+
+      // Initialize permissions for the new user if they're an accountant
+      if (role === "accountant") {
+        console.log("Initializing accountant permissions...");
+        try {
+          // Import and call the permission initialization
+          const { initializeDefaultPermissionsAction } = await import(
+            "./actions/permissions"
+          );
+          await initializeDefaultPermissionsAction();
+          console.log("Accountant permissions initialized");
+        } catch (permError) {
+          console.error("Error initializing permissions:", permError);
+        }
       }
 
       console.log("User creation process completed successfully");
       return {
         success: true,
-        message:
-          "User created successfully! They can now sign in with their credentials.",
+        message: `User ${fullName || email} created successfully with role: ${role}! They can now sign in with their email and password.`,
         userId: authData.user.id,
+        userRole: role,
+      };
+    } catch (error) {
+      console.error("Error in user setup:", error);
+      // Clean up auth user if setup fails
+      try {
+        await serviceSupabase.auth.admin.deleteUser(authData.user.id);
+      } catch (cleanupError) {
+        console.error("Error cleaning up auth user:", cleanupError);
+      }
+      return {
+        success: false,
+        error: "Failed to complete user setup. Please try again.",
       };
     }
-
-    return {
-      success: false,
-      error: "Failed to create user - no user data returned",
-    };
   } catch (error) {
     console.error("Error in createUserAction:", error);
     return {
@@ -1825,6 +1935,87 @@ export const updateRolePermissionAction = _updateRolePermissionAction;
 export const initializeDefaultPermissionsAction =
   _initializeDefaultPermissionsAction;
 
+// Action to assign role to existing user
+export const assignUserRoleAction = async (formData: FormData) => {
+  const supabase = await createClient();
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+
+  if (!currentUser) {
+    return {
+      success: false,
+      error: "You must be logged in to assign roles",
+    };
+  }
+
+  const userId = formData.get("user_id")?.toString();
+  const role = formData.get("role")?.toString();
+
+  if (!userId || !role) {
+    return {
+      success: false,
+      error: "User ID and role are required",
+    };
+  }
+
+  try {
+    // Use service role client to bypass RLS
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!,
+    );
+
+    // Get organization ID
+    const { data: orgData } = await serviceSupabase
+      .from("organizations")
+      .select("id")
+      .limit(1)
+      .single();
+
+    if (!orgData?.id) {
+      return {
+        success: false,
+        error: "Organization not found",
+      };
+    }
+
+    // Delete existing role assignments for this user
+    await serviceSupabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId)
+      .eq("organization_id", orgData.id);
+
+    // Insert new role assignment
+    const { error } = await serviceSupabase.from("user_roles").insert({
+      user_id: userId,
+      organization_id: orgData.id,
+      role: role,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error("Error assigning role:", error);
+      return {
+        success: false,
+        error: "Failed to assign role: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: `Role ${role} assigned successfully`,
+    };
+  } catch (error) {
+    console.error("Error in assignUserRoleAction:", error);
+    return {
+      success: false,
+      error: "Failed to assign role. Please try again.",
+    };
+  }
+};
+
 export const changeUserPasswordAction = async (formData: FormData) => {
   const supabase = await createClient();
   const {
@@ -1898,6 +2089,226 @@ export const changeUserPasswordAction = async (formData: FormData) => {
     return {
       success: false,
       error: "Failed to change user password. Please try again.",
+    };
+  }
+};
+
+// Project Management Actions
+export const getProjectsAction = async () => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+        projects: [],
+      };
+    }
+
+    const { data: projects, error } = await supabase
+      .from("projects")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching projects:", error);
+      return {
+        success: false,
+        error: "Failed to fetch projects",
+        projects: [],
+      };
+    }
+
+    return {
+      success: true,
+      projects: projects || [],
+    };
+  } catch (error) {
+    console.error("Error in getProjectsAction:", error);
+    return {
+      success: false,
+      error: "Failed to fetch projects",
+      projects: [],
+    };
+  }
+};
+
+export const createProjectAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const name = formData.get("name")?.toString();
+    const description = formData.get("description")?.toString();
+    const start_date = formData.get("start_date")?.toString();
+    const end_date = formData.get("end_date")?.toString();
+    const total_budget = parseFloat(
+      formData.get("total_budget")?.toString() || "0",
+    );
+    const status = formData.get("status")?.toString() || "active";
+
+    if (!name) {
+      return {
+        success: false,
+        error: "Project name is required",
+      };
+    }
+
+    const { error } = await supabase.from("projects").insert({
+      name,
+      description: description || null,
+      start_date: start_date || null,
+      end_date: end_date || null,
+      total_budget,
+      status,
+      project_manager_id: user.id,
+    });
+
+    if (error) {
+      console.error("Error creating project:", error);
+      return {
+        success: false,
+        error: "Failed to create project",
+      };
+    }
+
+    return {
+      success: true,
+      message: "Project created successfully",
+    };
+  } catch (error) {
+    console.error("Error in createProjectAction:", error);
+    return {
+      success: false,
+      error: "Failed to create project",
+    };
+  }
+};
+
+export const updateProjectAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const id = formData.get("id")?.toString();
+    const name = formData.get("name")?.toString();
+    const description = formData.get("description")?.toString();
+    const start_date = formData.get("start_date")?.toString();
+    const end_date = formData.get("end_date")?.toString();
+    const total_budget = parseFloat(
+      formData.get("total_budget")?.toString() || "0",
+    );
+    const status = formData.get("status")?.toString();
+
+    if (!id || !name) {
+      return {
+        success: false,
+        error: "Project ID and name are required",
+      };
+    }
+
+    const { error } = await supabase
+      .from("projects")
+      .update({
+        name,
+        description: description || null,
+        start_date: start_date || null,
+        end_date: end_date || null,
+        total_budget,
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error updating project:", error);
+      return {
+        success: false,
+        error: "Failed to update project",
+      };
+    }
+
+    return {
+      success: true,
+      message: "Project updated successfully",
+    };
+  } catch (error) {
+    console.error("Error in updateProjectAction:", error);
+    return {
+      success: false,
+      error: "Failed to update project",
+    };
+  }
+};
+
+export const deleteProjectAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const id = formData.get("id")?.toString();
+
+    if (!id) {
+      return {
+        success: false,
+        error: "Project ID is required",
+      };
+    }
+
+    const { error } = await supabase.from("projects").delete().eq("id", id);
+
+    if (error) {
+      console.error("Error deleting project:", error);
+      return {
+        success: false,
+        error: "Failed to delete project",
+      };
+    }
+
+    return {
+      success: true,
+      message: "Project deleted successfully",
+    };
+  } catch (error) {
+    console.error("Error in deleteProjectAction:", error);
+    return {
+      success: false,
+      error: "Failed to delete project",
     };
   }
 };

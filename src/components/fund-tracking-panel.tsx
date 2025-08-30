@@ -48,7 +48,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { createFundSourceAction } from "@/app/actions";
-import { canManageBudgetsSync, canViewFinancesSync } from "@/utils/permissions";
+import {
+  canManageBudgetsSync,
+  canViewFinancesSync,
+  canEditBudgetsSync,
+  canDeleteBudgetsSync,
+} from "@/utils/permissions";
 import {
   getCurrencySymbol,
   getCurrencyCode,
@@ -169,9 +174,21 @@ export default function FundTrackingPanel({
       const hasBudgetPermission = canManageBudgetsSync();
       const result = isAdminUser || hasBudgetPermission;
       setCanManage(result);
+
+      // Check edit/delete permissions specifically
+      const canEditBudget = canEditBudgetsSync();
+      const canDeleteBudget = canDeleteBudgetsSync();
+      const hasEditDeletePermission =
+        isAdminUser || (canEditBudget && canDeleteBudget);
+
       console.log(
-        `Fund Sources permissions - Role: ${userRole}, Admin: ${isAdminUser}, CanManage: ${result}`,
+        `Fund Sources permissions - Role: ${userRole}, Admin: ${isAdminUser}, CanManage: ${result}, CanEdit: ${canEditBudget}, CanDelete: ${canDeleteBudget}`,
       );
+
+      // Update allowEditDelete based on actual permissions
+      if (!isAdminUser && !hasEditDeletePermission) {
+        setAllowEditDelete(false);
+      }
     } catch (error) {
       console.error("Error checking permissions:", error);
       // Default to true for admin users even if permission check fails
@@ -425,7 +442,7 @@ export default function FundTrackingPanel({
                 Unrestricted
               </Button>
 
-              {(canManage || userRole === "admin") && (
+              {userRole === "admin" && (
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
                     <Button className="flex items-center gap-2">
@@ -1069,9 +1086,7 @@ export default function FundTrackingPanel({
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Received Date</TableHead>
-                {(canManage || userRole === "admin") && (
-                  <TableHead>Actions</TableHead>
-                )}
+                {userRole === "admin" && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1103,30 +1118,26 @@ export default function FundTrackingPanel({
                   <TableCell>
                     {new Date(fund.received_date).toLocaleDateString()}
                   </TableCell>
-                  {(canManage || userRole === "admin") && (
+                  {userRole === "admin" && (
                     <TableCell>
-                      {allowEditDelete || userRole === "admin" ? (
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEditFund(fund)}
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteFund(fund.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500">View Only</span>
-                      )}
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditFund(fund)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteFund(fund.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                   )}
                 </TableRow>

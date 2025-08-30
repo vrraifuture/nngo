@@ -1237,6 +1237,193 @@ export const getPermissionStatus = (permissionId: string): any => {
   };
 };
 
+// Function to create a sample accountant user for testing
+export const createSampleAccountantUser = (): void => {
+  if (typeof window === "undefined") return;
+
+  try {
+    const sampleAccountant = {
+      id: "accountant_001",
+      name: "Sample Accountant",
+      email: "accountant@example.com",
+      role: "accountant",
+      pin: "1234",
+      status: "active",
+      created_at: new Date().toISOString(),
+    };
+
+    // Get existing manual users
+    const existingUsers = JSON.parse(
+      localStorage.getItem("ngo_manual_users") || "[]",
+    );
+
+    // Check if accountant already exists
+    const accountantExists = existingUsers.find(
+      (u: any) => u.email === sampleAccountant.email,
+    );
+
+    if (!accountantExists) {
+      existingUsers.push(sampleAccountant);
+      localStorage.setItem("ngo_manual_users", JSON.stringify(existingUsers));
+      console.log("Sample accountant user created:", sampleAccountant);
+    } else {
+      console.log("Sample accountant user already exists");
+    }
+  } catch (error) {
+    console.error("Error creating sample accountant user:", error);
+  }
+};
+
+// Function to set user role (for testing purposes)
+export const setUserRoleForTesting = async (role: string): Promise<void> => {
+  if (typeof window === "undefined") return;
+
+  try {
+    console.log(`Setting user role for testing: ${role}`);
+
+    // Update session and localStorage
+    sessionStorage.setItem("temp_user_role", role);
+    localStorage.setItem("ngo_current_user_role", role);
+
+    // Set admin verification if role is admin
+    if (role === "admin") {
+      sessionStorage.setItem("admin_verified", "true");
+      localStorage.setItem("admin_verified", "true");
+    } else {
+      sessionStorage.removeItem("admin_verified");
+      localStorage.removeItem("admin_verified");
+    }
+
+    // Clear permissions cache to force refresh
+    permissionsCache = [];
+    cacheTimestamp = 0;
+
+    // Initialize permissions for the new role
+    await initializeDefaultPermissions();
+    await syncPermissionsToSessionCache();
+
+    // Dispatch events to notify components
+    window.dispatchEvent(
+      new CustomEvent("roleChanged", {
+        detail: { newRole: role },
+      }),
+    );
+
+    window.dispatchEvent(
+      new CustomEvent("permissionsChanged", {
+        detail: { action: "roleChange", role },
+      }),
+    );
+
+    console.log(`User role set to ${role} for testing`);
+  } catch (error) {
+    console.error("Error setting user role for testing:", error);
+  }
+};
+
+// Function to demonstrate accountant permissions
+export const demonstrateAccountantPermissions = async (): Promise<void> => {
+  if (typeof window === "undefined") return;
+
+  try {
+    console.log("\n=== ACCOUNTANT PERMISSIONS DEMONSTRATION ===");
+
+    // Create sample accountant user
+    createSampleAccountantUser();
+
+    // Set role to accountant for testing
+    await setUserRoleForTesting("accountant");
+
+    console.log("\n📋 ACCOUNTANT ROLE PERMISSIONS:");
+    console.log("✅ CAN ADD:");
+    console.log(`   - Add Expenses: ${canManageExpensesSync()}`);
+    console.log(`   - Add Ledger Entries: ${canManageLedgerSync()}`);
+    console.log(`   - View Finances: ${canViewFinancesSync()}`);
+    console.log(`   - View Ledger: ${canViewLedgerSync()}`);
+    console.log(`   - Generate Reports: ${canGenerateReportsSync()}`);
+
+    console.log("\n❌ CANNOT EDIT/DELETE:");
+    console.log(`   - Edit Expenses: ${canEditExpensesSync()}`);
+    console.log(`   - Delete Expenses: ${canDeleteExpensesSync()}`);
+    console.log(`   - Edit Ledger: ${canEditLedgerSync()}`);
+    console.log(`   - Delete Ledger: ${canDeleteLedgerSync()}`);
+    console.log(`   - Manage Settings: ${canManageSettingsSync()}`);
+    console.log(`   - Manage Users: ${canManageUsersSync()}`);
+
+    console.log("\n💡 SUMMARY:");
+    console.log("   - Accountants can ADD expenses and ledger entries");
+    console.log("   - Accountants CANNOT EDIT or DELETE anything");
+    console.log("   - Accountants CANNOT access settings or user management");
+    console.log("   - This ensures data integrity while allowing data entry");
+
+    console.log("\n🔐 TEST LOGIN:");
+    console.log("   - Email: accountant@example.com");
+    console.log("   - PIN: 1234");
+
+    console.log("\n=== END DEMONSTRATION ===");
+  } catch (error) {
+    console.error("Error demonstrating accountant permissions:", error);
+  }
+};
+
+// Function to test accountant permissions in console
+export const testAccountantPermissions = (): void => {
+  if (typeof window === "undefined") return;
+
+  console.log("\n🧪 TESTING ACCOUNTANT PERMISSIONS:");
+  console.log("\n📊 Current Status:");
+  console.log(`Current Role: ${getUserRoleSync()}`);
+
+  const expensePermissions = {
+    manage: getPermissionStatus("manage_expenses"),
+    edit: getPermissionStatus("edit_expenses"),
+    delete: getPermissionStatus("delete_expenses"),
+  };
+
+  const ledgerPermissions = {
+    manage: getPermissionStatus("manage_ledger"),
+    edit: getPermissionStatus("edit_ledger"),
+    delete: getPermissionStatus("delete_ledger"),
+  };
+
+  console.log("\n💰 EXPENSE PERMISSIONS:");
+  console.log(
+    `✅ Can Add Expenses: ${expensePermissions.manage.hasPermission}`,
+  );
+  console.log(`❌ Can Edit Expenses: ${expensePermissions.edit.hasPermission}`);
+  console.log(
+    `❌ Can Delete Expenses: ${expensePermissions.delete.hasPermission}`,
+  );
+
+  console.log("\n📚 LEDGER PERMISSIONS:");
+  console.log(`✅ Can Add Ledger: ${ledgerPermissions.manage.hasPermission}`);
+  console.log(`❌ Can Edit Ledger: ${ledgerPermissions.edit.hasPermission}`);
+  console.log(
+    `❌ Can Delete Ledger: ${ledgerPermissions.delete.hasPermission}`,
+  );
+
+  console.log("\n🎯 EXPECTED BEHAVIOR:");
+  console.log(
+    "- Accountants should be able to ADD expenses and ledger entries",
+  );
+  console.log("- Accountants should NOT be able to EDIT or DELETE anything");
+  console.log("- This ensures data integrity while allowing data entry");
+};
+
+// Helper function to quickly switch roles for testing
+export const switchToAccountantRole = async (): Promise<void> => {
+  await setUserRoleForTesting("accountant");
+  console.log("\n🔄 Switched to ACCOUNTANT role");
+  console.log("📋 Testing permissions...");
+  testAccountantPermissions();
+};
+
+export const switchToAdminRole = async (): Promise<void> => {
+  await setUserRoleForTesting("admin");
+  console.log("\n🔄 Switched to ADMIN role");
+  console.log("📋 Admin has full permissions");
+};
+
 // Function to authenticate manual users with PIN
 export const authenticateManualUser = async (
   email: string,
@@ -1305,6 +1492,10 @@ export const authenticateManualUser = async (
     // Clear permissions cache to force refresh
     permissionsCache = [];
     cacheTimestamp = 0;
+
+    // Initialize permissions for the authenticated user
+    await initializeDefaultPermissions();
+    await syncPermissionsToSessionCache();
 
     return {
       success: true,
