@@ -2,7 +2,7 @@ import DashboardNavbar from "@/components/dashboard-navbar";
 import FundTrackingPanel from "@/components/fund-tracking-panel";
 import BudgetComparisonChart from "@/components/budget-comparison-chart";
 import ExpenseManagement from "@/components/expense-management";
-import ReportGeneration from "@/components/report-generation";
+import ReportGeneration from "@/components/report-generation-fixed-pdf";
 import GeneralLedger from "@/components/general-ledger";
 import DashboardCurrencyUpdater from "@/components/dashboard-currency-updater";
 import DashboardCurrencyDisplay from "@/components/dashboard-currency-display";
