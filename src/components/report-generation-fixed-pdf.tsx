@@ -91,7 +91,7 @@ const sanitizeInput = (input: string): string => {
 
 // Enhanced content validation
 const validateContent = (content: string, minLength: number = 100): boolean => {
-  return content && content.trim().length >= minLength;
+  return Boolean(content && content.trim().length >= minLength);
 };
 
 // Generate real data content for reports
@@ -165,6 +165,53 @@ const generateReportContent = async (
           content += `${i + 1}. ${expense.title} - FRw ${(expense.amount || 0).toLocaleString()} (${category}) - ${expense.expense_date} - ${expense.status}\n`;
         });
         content += `\n`;
+      }
+    } else if (report.type === "budget_variance") {
+      const { data: categories } = await supabase
+        .from("budget_categories")
+        .select("*, expenses(amount, status)");
+
+      content += `BUDGET VARIANCE REPORT\n======================\n\n`;
+
+      if (categories?.length) {
+        let totalBudget = 0;
+        let totalActual = 0;
+
+        content += `CATEGORY ANALYSIS:\n`;
+        categories.forEach((category) => {
+          const budgetAmount = category.budget_amount || 0;
+          const actualExpenses =
+            category.expenses
+              ?.filter((e) => e.status === "approved" || e.status === "paid")
+              ?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+
+          const variance = budgetAmount - actualExpenses;
+          const variancePercent =
+            budgetAmount > 0
+              ? ((variance / budgetAmount) * 100).toFixed(1)
+              : "0";
+
+          totalBudget += budgetAmount;
+          totalActual += actualExpenses;
+
+          content += `- ${category.name}:\n`;
+          content += `  Budget: FRw ${budgetAmount.toLocaleString()}\n`;
+          content += `  Actual: FRw ${actualExpenses.toLocaleString()}\n`;
+          content += `  Variance: FRw ${variance.toLocaleString()} (${variancePercent}%)\n`;
+          content += `  Status: ${variance >= 0 ? "Under Budget" : "Over Budget"}\n\n`;
+        });
+
+        const totalVariance = totalBudget - totalActual;
+        const totalVariancePercent =
+          totalBudget > 0
+            ? ((totalVariance / totalBudget) * 100).toFixed(1)
+            : "0";
+
+        content += `OVERALL SUMMARY:\n`;
+        content += `Total Budget: FRw ${totalBudget.toLocaleString()}\n`;
+        content += `Total Actual: FRw ${totalActual.toLocaleString()}\n`;
+        content += `Total Variance: FRw ${totalVariance.toLocaleString()} (${totalVariancePercent}%)\n`;
+        content += `Budget Utilization: ${totalBudget > 0 ? ((totalActual / totalBudget) * 100).toFixed(1) : "0"}%\n\n`;
       }
     } else if (report.type === "donor_report") {
       const { data: fundSources } = await supabase
@@ -366,6 +413,15 @@ export default function ReportGeneration({
       type: "financial_summary",
       icon: <BarChart3 className="h-6 w-6" />,
       fields: ["dateRange", "projects", "includeCharts"],
+    },
+    {
+      id: "budget_variance",
+      name: "Budget Variance Report",
+      description:
+        "Compare actual expenses against budgeted amounts by category",
+      type: "budget_variance",
+      icon: <PieChart className="h-6 w-6" />,
+      fields: ["dateRange", "categories", "projects", "includeCharts"],
     },
     {
       id: "donor_report",
@@ -828,6 +884,45 @@ export default function ReportGeneration({
               ]);
             });
           }
+        } else if (report.type === "budget_variance") {
+          const { data: categories } = await supabase
+            .from("budget_categories")
+            .select("*, expenses(amount, status)");
+
+          if (categories?.length) {
+            csvContent.push([
+              "Category",
+              "Budget (FRw)",
+              "Actual (FRw)",
+              "Variance (FRw)",
+              "Variance %",
+              "Status",
+            ]);
+            categories.forEach((category) => {
+              const budgetAmount = category.budget_amount || 0;
+              const actualExpenses =
+                category.expenses
+                  ?.filter(
+                    (e) => e.status === "approved" || e.status === "paid",
+                  )
+                  ?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+
+              const variance = budgetAmount - actualExpenses;
+              const variancePercent =
+                budgetAmount > 0
+                  ? ((variance / budgetAmount) * 100).toFixed(1)
+                  : "0";
+
+              csvContent.push([
+                category.name,
+                budgetAmount.toLocaleString(),
+                actualExpenses.toLocaleString(),
+                variance.toLocaleString(),
+                `${variancePercent}%`,
+                variance >= 0 ? "Under Budget" : "Over Budget",
+              ]);
+            });
+          }
         } else if (report.type === "donor_report") {
           const { data: fundSources } = await supabase
             .from("fund_sources")
@@ -952,6 +1047,31 @@ export default function ReportGeneration({
             <tr><td>Total Expenses</td><td>${totalExpenses.toLocaleString()}</td><td>Verified</td><td></td><td></td><td></td></tr>
             <tr><td>Balance</td><td>${(totalFunds - totalExpenses).toLocaleString()}</td><td>Available</td><td></td><td></td><td></td></tr>
           `;
+        } else if (report.type === "budget_variance") {
+          const { data: categories } = await supabase
+            .from("budget_categories")
+            .select("*, expenses(amount, status)");
+
+          excelContent += `<tr class="header"><td colspan="6"><b>Budget Variance Analysis</b></td></tr>
+            <tr><th>Category</th><th>Budget (FRw)</th><th>Actual (FRw)</th><th>Variance (FRw)</th><th>Variance %</th><th>Status</th></tr>`;
+
+          categories?.forEach((category) => {
+            const budgetAmount = category.budget_amount || 0;
+            const actualExpenses =
+              category.expenses
+                ?.filter((e) => e.status === "approved" || e.status === "paid")
+                ?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+
+            const variance = budgetAmount - actualExpenses;
+            const variancePercent =
+              budgetAmount > 0
+                ? ((variance / budgetAmount) * 100).toFixed(1)
+                : "0";
+
+            excelContent += `<tr><td>${category.name}</td><td>${budgetAmount.toLocaleString()}</td>
+              <td>${actualExpenses.toLocaleString()}</td><td>${variance.toLocaleString()}</td>
+              <td>${variancePercent}%</td><td>${variance >= 0 ? "Under Budget" : "Over Budget"}</td></tr>`;
+          });
         } else if (report.type === "expense_report") {
           const { data: expenses } = await supabase
             .from("expenses")
