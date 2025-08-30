@@ -1147,7 +1147,7 @@ export default function GeneralLedger({
       return { isValid: false, errors: [] }; // Return no errors for empty rows, just mark as invalid
     }
 
-    // Check if row has minimum required columns
+    // Check if row has midnimum required columns
     if (row.length < 6) {
       errors.push(
         `Row ${rowIndex + 1}: Missing required columns. Expected at least 6 columns.`,
