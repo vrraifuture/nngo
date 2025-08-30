@@ -796,8 +796,12 @@ export default function GeneralLedger({
         console.log("Database connection test successful");
       } catch (connectionError) {
         console.error("Database connection error:", connectionError);
+        const errorMessage =
+          connectionError instanceof Error
+            ? connectionError.message
+            : String(connectionError);
         alert(
-          `Cannot connect to database: ${connectionError.message || connectionError}. Please check your internet connection and database configuration.`,
+          `Cannot connect to database: ${errorMessage}. Please check your internet connection and database configuration.`,
         );
         return;
       }
@@ -960,8 +964,12 @@ export default function GeneralLedger({
         console.log("Database connection test successful");
       } catch (connectionError) {
         console.error("Database connection error:", connectionError);
+        const errorMessage =
+          connectionError instanceof Error
+            ? connectionError.message
+            : String(connectionError);
         alert(
-          `Cannot connect to database: ${connectionError.message || connectionError}. Please check your internet connection and database configuration.`,
+          `Cannot connect to database: ${errorMessage}. Please check your internet connection and database configuration.`,
         );
         return;
       }
