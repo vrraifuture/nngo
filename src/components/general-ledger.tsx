@@ -370,32 +370,13 @@ export default function GeneralLedger({
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Database fetch error:", error);
-        console.error("Error details:", {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
-
-        // Check if it's a table not found error
-        if (error.code === "42P01") {
-          console.warn(
-            "ledger_entries table does not exist, using sample data",
-          );
-        } else {
-          console.warn(
-            "Database error occurred, using sample data as fallback",
-          );
-        }
-      } else if (dbEntries && dbEntries.length > 0) {
+      if (!error && dbEntries && dbEntries.length > 0) {
         console.log(`Loaded ${dbEntries.length} ledger entries from database`);
         setLedgerEntries(dbEntries);
         return;
-      } else {
-        console.log("No ledger entries found in database, using sample data");
       }
+
+      console.log("No ledger entries found in database, using sample data");
 
       // Sample entries for demonstration
       const sampleEntries: LedgerEntry[] = [
@@ -458,8 +439,7 @@ export default function GeneralLedger({
 
   const saveLedgerEntries = async (entries: LedgerEntry[]) => {
     setLedgerEntries(entries);
-    // This function is now only used for local state updates
-    // Individual database operations are handled in specific functions
+    // No localStorage usage - data should be saved to database through individual operations
   };
 
   const saveChartOfAccounts = async (accounts: AccountType[]) => {
@@ -526,7 +506,7 @@ export default function GeneralLedger({
     );
   };
 
-  const handleAddAccount = async () => {
+  const handleAddAccount = () => {
     // Check permissions using the permission system - only admin can add accounts
     if (!canManageSettingsSync()) {
       alert(
@@ -546,51 +526,26 @@ export default function GeneralLedger({
       return;
     }
 
-    try {
-      const account: AccountType = {
-        code: newAccount.code,
-        name: newAccount.name,
-        type: newAccount.type,
-        normal_balance: newAccount.normal_balance,
-      };
+    const account: AccountType = {
+      code: newAccount.code,
+      name: newAccount.name,
+      type: newAccount.type,
+      normal_balance: newAccount.normal_balance,
+    };
 
-      console.log("Attempting to save new account to database:", account);
+    const newAccounts = [...chartOfAccounts, account].sort((a, b) =>
+      a.code.localeCompare(b.code),
+    );
+    saveChartOfAccounts(newAccounts);
 
-      // Try to save to database
-      const { data, error } = await supabase
-        .from("chart_of_accounts")
-        .insert([account])
-        .select();
-
-      if (error) {
-        console.error("Database account insertion error:", error);
-        // Fallback to local state update
-        const newAccounts = [...chartOfAccounts, account].sort((a, b) =>
-          a.code.localeCompare(b.code),
-        );
-        setChartOfAccounts(newAccounts);
-        alert(
-          `Account added locally. Database save failed: ${error.message}. Please check your database connection.`,
-        );
-      } else {
-        console.log("Successfully saved account to database:", data);
-        // Refresh from database to get the latest data
-        await initializeChartOfAccounts();
-        alert("Account added successfully to database!");
-      }
-
-      // Reset form
-      setNewAccount({
-        code: "",
-        name: "",
-        type: "asset",
-        normal_balance: "debit",
-      });
-      setShowAddAccountDialog(false);
-    } catch (error) {
-      console.error("Error adding account:", error);
-      alert("Failed to add account. Please try again.");
-    }
+    // Reset form
+    setNewAccount({
+      code: "",
+      name: "",
+      type: "asset",
+      normal_balance: "debit",
+    });
+    setShowAddAccountDialog(false);
   };
 
   // Calculate batch totals
@@ -672,8 +627,6 @@ export default function GeneralLedger({
 
   // Submit batch entries
   const handleSubmitBatch = async () => {
-    console.log("Starting batch submission process...");
-
     // Check permissions using the permission system
     if (!canManageLedgerSync()) {
       alert("You don't have permission to add ledger entries.");
@@ -717,97 +670,37 @@ export default function GeneralLedger({
     }
 
     try {
-      console.log("Getting current user...");
       // Get current user
       const {
         data: { user },
-        error: userError,
       } = await supabase.auth.getUser();
 
-      if (userError) {
-        console.error("Error getting user:", userError);
+      if (!user) {
+        alert("You must be logged in to add ledger entries.");
+        return;
       }
 
-      console.log("Current user:", user?.id || "No user found");
-
-      // Prepare entries for database insertion
-      const entriesForDB = batchEntries.map((entry, index) => {
-        console.log(`Processing entry ${index + 1}:`, entry);
-
+      // Convert batch entries to database format
+      const entriesForDB = batchEntries.map((entry) => {
         const selectedAccount = chartOfAccounts.find(
           (acc) => acc.code === entry.account_code,
         );
 
-        const debitAmount = parseFloat(entry.debit) || 0;
-        const creditAmount = parseFloat(entry.credit) || 0;
-
-        // Validate the entry data
-        if (!entry.account_code || !entry.description) {
-          throw new Error(
-            `Entry ${index + 1}: Missing account_code or description`,
-          );
-        }
-
-        if (isNaN(debitAmount) || isNaN(creditAmount)) {
-          throw new Error(
-            `Entry ${index + 1}: Invalid debit or credit amounts`,
-          );
-        }
-
-        const processedEntry = {
-          account_code: entry.account_code.trim(),
-          account_name: (
-            selectedAccount?.name ||
-            entry.account_name ||
-            "Unknown Account"
-          ).trim(),
+        return {
+          account_code: entry.account_code,
+          account_name: selectedAccount?.name || entry.account_name,
           date: batchDate,
-          description: entry.description.trim(),
-          debit: debitAmount,
-          credit: creditAmount,
-          reference_number: entry.reference_number?.trim() || null,
-          created_by: user?.id || null,
+          description: entry.description,
+          debit: parseFloat(entry.debit) || 0,
+          credit: parseFloat(entry.credit) || 0,
+          reference_number: entry.reference_number || null,
+          created_by: user.id,
         };
-
-        console.log(`Processed entry ${index + 1}:`, processedEntry);
-        return processedEntry;
       });
 
-      console.log(
-        "All entries processed for database insertion:",
-        entriesForDB,
-      );
-
-      // Test database connection first
-      console.log("Testing database connection...");
-      try {
-        const { data: testData, error: testError } = await supabase
-          .from("ledger_entries")
-          .select("id")
-          .limit(1);
-
-        if (testError) {
-          console.error("Database connection test failed:", testError);
-          throw new Error(
-            `Database connection failed: ${testError.message || testError.code || "Unknown error"}`,
-          );
-        }
-
-        console.log("Database connection test successful");
-      } catch (connectionError) {
-        console.error("Database connection error:", connectionError);
-        const errorMessage =
-          connectionError instanceof Error
-            ? connectionError.message
-            : String(connectionError);
-        alert(
-          `Cannot connect to database: ${errorMessage}. Please check your internet connection and database configuration.`,
-        );
-        return;
-      }
+      console.log("Submitting batch entries:", entriesForDB);
 
       // Try to save to database
-      console.log("Inserting entries into database...");
       const { data, error } = await supabase
         .from("ledger_entries")
         .insert(entriesForDB)
@@ -815,46 +708,31 @@ export default function GeneralLedger({
 
       if (error) {
         console.error("Database batch insertion error:", error);
-        console.error("Error details:", {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
 
-        let errorMessage = "Unknown database error";
-        if (error.message) {
-          errorMessage = error.message;
-        } else if (error.code) {
-          errorMessage = `Database error code: ${error.code}`;
-        }
+        // Fallback to local state update
+        const newEntries = entriesForDB.map((entry, index) => ({
+          id: `batch_${Date.now()}_${index}`,
+          ...entry,
+          reference_number: entry.reference_number || undefined,
+          created_at: new Date().toISOString(),
+        }));
 
-        // Check for common error types
-        if (error.code === "42P01") {
-          errorMessage =
-            "Table 'ledger_entries' does not exist. Please check your database schema.";
-        } else if (error.code === "42703") {
-          errorMessage =
-            "One or more columns do not exist in the ledger_entries table. Please check your database schema.";
-        } else if (error.code === "23505") {
-          errorMessage =
-            "Duplicate entry detected. Please check for unique constraints.";
-        } else if (error.code === "23502") {
-          errorMessage =
-            "Required field is missing. Please check that all required fields are provided.";
-        }
+        const updatedEntries = [...ledgerEntries, ...newEntries];
+        setLedgerEntries(updatedEntries);
 
         alert(
-          `Failed to save entries to database: ${errorMessage}\n\nTechnical details:\nCode: ${error.code || "N/A"}\nDetails: ${error.details || "N/A"}\nHint: ${error.hint || "N/A"}`,
+          `Batch entries saved locally due to database error: ${error.message}. ${entriesForDB.length} entries added successfully.`,
         );
-        return;
+      } else {
+        console.log("Successfully saved batch to database:", data);
+
+        // Refresh from database to get the latest data
+        await fetchLedgerEntries();
+
+        alert(
+          `Successfully added ${entriesForDB.length} entries to the general ledger!`,
+        );
       }
-
-      console.log("Successfully saved batch entries to database:", data);
-
-      // Refresh from database to get the latest data
-      console.log("Refreshing ledger entries from database...");
-      await fetchLedgerEntries();
 
       // Reset batch
       setBatchEntries([]);
@@ -862,28 +740,19 @@ export default function GeneralLedger({
       setIsBalanced(false);
       setForceSubmit(false);
       setShowBatchAddDialog(false);
-
-      alert(
-        `Successfully added ${entriesForDB.length} entries to the general ledger and saved to database!`,
-      );
     } catch (error) {
-      console.error("Error in batch submission process:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      alert(`Failed to save batch entries: ${errorMessage}. Please try again.`);
+      console.error("Error submitting batch entries:", error);
+      alert("Failed to submit batch entries. Please try again.");
     }
   };
 
   const handleAddEntry = async () => {
-    console.log("Starting single entry submission process...");
-
     // Check permissions using the permission system
     if (!canManageLedgerSync()) {
       alert("You don't have permission to add ledger entries.");
       return;
     }
 
-    // Validate required fields
     if (
       !newEntry.account_code ||
       !newEntry.description ||
@@ -904,9 +773,8 @@ export default function GeneralLedger({
       return;
     }
 
-    // Ensure at least one amount is greater than 0
     if (debitAmount === 0 && creditAmount === 0) {
-      alert("Please enter a debit or credit amount greater than 0.");
+      alert("Please enter either a debit or credit amount.");
       return;
     }
 
@@ -915,67 +783,31 @@ export default function GeneralLedger({
     );
 
     try {
-      console.log("Getting current user...");
       // Get current user
       const {
         data: { user },
-        error: userError,
       } = await supabase.auth.getUser();
 
-      if (userError) {
-        console.error("Error getting user:", userError);
+      if (!user) {
+        alert("You must be logged in to add ledger entries.");
+        return;
       }
-
-      console.log("Current user:", user?.id || "No user found");
 
       // Prepare entry for database insertion
       const entryForDB = {
-        account_code: newEntry.account_code.trim(),
-        account_name: (
-          selectedAccount?.name ||
-          newEntry.account_name ||
-          "Unknown Account"
-        ).trim(),
+        account_code: newEntry.account_code,
+        account_name: selectedAccount?.name || newEntry.account_name,
         date: newEntry.date,
-        description: newEntry.description.trim(),
+        description: newEntry.description,
         debit: debitAmount,
         credit: creditAmount,
-        reference_number: newEntry.reference_number?.trim() || null,
-        created_by: user?.id || null,
+        reference_number: newEntry.reference_number || null,
+        created_by: user.id,
       };
 
       console.log("Attempting to save ledger entry:", entryForDB);
 
-      // Test database connection first
-      console.log("Testing database connection...");
-      try {
-        const { data: testData, error: testError } = await supabase
-          .from("ledger_entries")
-          .select("id")
-          .limit(1);
-
-        if (testError) {
-          console.error("Database connection test failed:", testError);
-          throw new Error(
-            `Database connection failed: ${testError.message || testError.code || "Unknown error"}`,
-          );
-        }
-
-        console.log("Database connection test successful");
-      } catch (connectionError) {
-        console.error("Database connection error:", connectionError);
-        const errorMessage =
-          connectionError instanceof Error
-            ? connectionError.message
-            : String(connectionError);
-        alert(
-          `Cannot connect to database: ${errorMessage}. Please check your internet connection and database configuration.`,
-        );
-        return;
-      }
-
       // Try to save to database
-      console.log("Inserting entry into database...");
       const { data, error } = await supabase
         .from("ledger_entries")
         .insert([entryForDB])
@@ -983,53 +815,27 @@ export default function GeneralLedger({
 
       if (error) {
         console.error("Database insertion error:", error);
-        console.error("Error details:", {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
 
-        let errorMessage = "Unknown database error";
-        if (error.message) {
-          errorMessage = error.message;
-        } else if (error.code) {
-          errorMessage = `Database error code: ${error.code}`;
-        }
-
-        // Check for common error types
-        if (error.code === "42P01") {
-          errorMessage =
-            "Table 'ledger_entries' does not exist. Please check your database schema.";
-        } else if (error.code === "42703") {
-          errorMessage =
-            "One or more columns do not exist in the ledger_entries table. Please check your database schema.";
-        } else if (error.code === "23505") {
-          errorMessage =
-            "Duplicate entry detected. Please check for unique constraints.";
-        } else if (error.code === "23502") {
-          errorMessage =
-            "Required field is missing. Please check that all required fields are provided.";
-        }
-
-        // Add to local state as fallback
-        const entryWithId: LedgerEntry = {
+        // Fallback to local state update
+        const newEntry = {
+          id: `entry_${Date.now()}`,
           ...entryForDB,
-          id: `local_${Date.now()}`,
+          reference_number: entryForDB.reference_number || undefined,
           created_at: new Date().toISOString(),
         };
-        const newEntries: LedgerEntry[] = [...ledgerEntries, entryWithId];
-        setLedgerEntries(newEntries);
+
+        const updatedEntries = [newEntry, ...ledgerEntries];
+        setLedgerEntries(updatedEntries);
 
         alert(
-          `Entry added locally but database save failed: ${errorMessage}\n\nTechnical details:\nCode: ${error.code || "N/A"}\nDetails: ${error.details || "N/A"}\nHint: ${error.hint || "N/A"}\n\nThe entry has been saved locally and will be available until you refresh the page.`,
+          `Ledger entry saved locally due to database error: ${error.message}. Entry added successfully.`,
         );
       } else {
         console.log("Successfully saved to database:", data);
+
         // Refresh from database to get the latest data
-        console.log("Refreshing ledger entries from database...");
         await fetchLedgerEntries();
-        alert("Ledger entry added successfully to database!");
+        alert("Ledger entry added successfully!");
       }
 
       // Reset form
@@ -1044,10 +850,8 @@ export default function GeneralLedger({
       });
       setShowAddDialog(false);
     } catch (error) {
-      console.error("Error in single entry submission process:", error);
-      alert(
-        `Failed to add ledger entry: ${error.message || error}. Please try again.`,
-      );
+      console.error("Error adding ledger entry:", error);
+      alert("Failed to add ledger entry. Please try again.");
     }
   };
 
@@ -1071,10 +875,8 @@ export default function GeneralLedger({
     if (!editingEntry) return;
 
     try {
-      console.log("Attempting to update ledger entry:", editingEntry);
-
-      // Prepare entry for database update
-      const entryForDB = {
+      // Prepare update data
+      const updateData = {
         account_code: editingEntry.account_code,
         account_name: editingEntry.account_name,
         date: editingEntry.date,
@@ -1084,31 +886,30 @@ export default function GeneralLedger({
         reference_number: editingEntry.reference_number || null,
       };
 
+      console.log("Updating ledger entry:", editingEntry.id, updateData);
+
       // Try to update in database
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("ledger_entries")
-        .update(entryForDB)
-        .eq("id", editingEntry.id)
-        .select();
+        .update(updateData)
+        .eq("id", editingEntry.id);
 
       if (error) {
         console.error("Database update error:", error);
-        const errorMessage =
-          error?.message || error?.code || "Unknown database error";
         alert(
-          `Failed to update entry in database: ${errorMessage}. Please check your database connection and permissions.`,
+          `Failed to update ledger entry in database: ${error.message}. Please try again.`,
         );
         return;
       }
 
-      console.log("Successfully updated entry in database:", data);
+      console.log("Successfully updated in database");
 
       // Refresh from database to get the latest data
       await fetchLedgerEntries();
+      alert("Ledger entry updated successfully!");
 
       setShowEditDialog(false);
       setEditingEntry(null);
-      alert("Ledger entry updated successfully in database!");
     } catch (error) {
       console.error("Error updating ledger entry:", error);
       alert("Failed to update ledger entry. Please try again.");
@@ -1131,7 +932,7 @@ export default function GeneralLedger({
     }
 
     try {
-      console.log("Attempting to delete ledger entry:", entryId);
+      console.log("Deleting ledger entry:", entryId);
 
       // Try to delete from database
       const { error } = await supabase
@@ -1140,21 +941,18 @@ export default function GeneralLedger({
         .eq("id", entryId);
 
       if (error) {
-        console.error("Database deletion error:", error);
-        const errorMessage =
-          error?.message || error?.code || "Unknown database error";
+        console.error("Database delete error:", error);
         alert(
-          `Failed to delete entry from database: ${errorMessage}. Please check your database connection and permissions.`,
+          `Failed to delete ledger entry from database: ${error.message}. Please try again.`,
         );
         return;
       }
 
-      console.log("Successfully deleted entry from database");
+      console.log("Successfully deleted from database");
 
       // Refresh from database to get the latest data
       await fetchLedgerEntries();
-
-      alert("Ledger entry deleted successfully from database!");
+      alert("Ledger entry deleted successfully!");
     } catch (error) {
       console.error("Error deleting ledger entry:", error);
       alert("Failed to delete ledger entry. Please try again.");
