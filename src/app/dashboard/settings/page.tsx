@@ -18,7 +18,6 @@ import {
 } from "@/utils/permissions";
 import CurrencySettings from "@/components/currency-settings";
 import DashboardCurrencyUpdater from "@/components/dashboard-currency-updater";
-import ProjectSettings from "@/components/project-settings";
 
 // Export the client component directly
 export default function SettingsPage() {
@@ -230,8 +229,22 @@ function SettingsPageContent() {
             }}
           />
 
-          {/* Project Management Settings */}
-          <ProjectSettings />
+          {/* Project Management Settings - Temporarily disabled */}
+          <Card className="bg-blue-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-blue-800">
+                Project Management
+              </CardTitle>
+              <CardDescription className="text-blue-600">
+                Project management features will be available soon
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-blue-700">
+                Project management functionality is being developed.
+              </p>
+            </CardContent>
+          </Card>
 
           {/* User Management Settings */}
           <Card className="bg-purple-50 border-purple-200">
