@@ -1,11 +1,11 @@
+import type { Currency } from "../utils/currency";
+
 declare global {
   interface Window {
-    defaultCurrency?: {
-      code: string;
-      symbol: string;
-      name: string;
-    };
+    defaultCurrency?: Currency;
   }
 }
+
+export {};
 
 export {};
