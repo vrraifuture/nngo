@@ -122,9 +122,10 @@ const generateReportContent = async (
         .in("status", ["approved", "paid"]);
 
       const totalFunds =
-        funds?.reduce((sum, f) => sum + (f.amount || 0), 0) || 0;
+        funds?.reduce((sum: number, f: any) => sum + (f.amount || 0), 0) || 0;
       const totalExpenses =
-        expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+        expenses?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) ||
+        0;
       const balance = totalFunds - totalExpenses;
       const utilizationRate =
         totalFunds > 0 ? ((totalExpenses / totalFunds) * 100).toFixed(1) : "0";
@@ -137,7 +138,7 @@ const generateReportContent = async (
 
       if (funds?.length) {
         content += `FUND SOURCES:\n`;
-        funds.forEach((fund) => {
+        funds.forEach((fund: any) => {
           content += `- ${fund.name}: FRw ${(fund.amount || 0).toLocaleString()} (${fund.is_restricted ? "Restricted" : "Unrestricted"})\n`;
         });
         content += `\n`;
@@ -149,7 +150,8 @@ const generateReportContent = async (
         .in("status", ["approved", "paid"]);
 
       const totalExpenses =
-        expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+        expenses?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) ||
+        0;
       const avgExpense = expenses?.length ? totalExpenses / expenses.length : 0;
 
       content += `EXPENSE ANALYSIS REPORT\n=======================\n\n`;
@@ -159,7 +161,7 @@ const generateReportContent = async (
 
       if (expenses?.length) {
         content += `DETAILED EXPENSES:\n`;
-        expenses.slice(0, 20).forEach((expense, i) => {
+        expenses.slice(0, 20).forEach((expense: any, i: number) => {
           const category = expense.budget_categories?.name || "Uncategorized";
           const project = expense.projects?.name || "General";
           content += `${i + 1}. ${expense.title} - FRw ${(expense.amount || 0).toLocaleString()} (${category}) - ${expense.expense_date} - ${expense.status}\n`;
@@ -172,7 +174,10 @@ const generateReportContent = async (
         .select("*, donors(name, type)");
 
       const totalDonations =
-        fundSources?.reduce((sum, f) => sum + (f.amount || 0), 0) || 0;
+        fundSources?.reduce(
+          (sum: number, f: any) => sum + (f.amount || 0),
+          0,
+        ) || 0;
       const avgDonation = fundSources?.length
         ? totalDonations / fundSources.length
         : 0;
@@ -184,7 +189,7 @@ const generateReportContent = async (
 
       if (fundSources?.length) {
         content += `DONOR CONTRIBUTIONS:\n`;
-        fundSources.forEach((fund, i) => {
+        fundSources.forEach((fund: any, i: number) => {
           const donorName = fund.donors?.name || "Anonymous";
           content += `${i + 1}. ${donorName} - FRw ${(fund.amount || 0).toLocaleString()} (${fund.name}) - ${fund.received_date}\n`;
         });
@@ -769,9 +774,13 @@ export default function ReportGeneration({
             .in("status", ["approved", "paid"]);
 
           const totalFunds =
-            funds?.reduce((sum, f) => sum + (f.amount || 0), 0) || 0;
+            funds?.reduce((sum: number, f: any) => sum + (f.amount || 0), 0) ||
+            0;
           const totalExpenses =
-            expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+            expenses?.reduce(
+              (sum: number, e: any) => sum + (e.amount || 0),
+              0,
+            ) || 0;
 
           csvContent.push(["Financial Overview", "Amount (FRw)", "Status"]);
           csvContent.push([
@@ -849,7 +858,7 @@ export default function ReportGeneration({
         csvContent.push([
           "Error",
           "Unable to fetch real data",
-          dataError.message || "Unknown error",
+          (dataError as Error).message || "Unknown error",
         ]);
       }
 
@@ -941,9 +950,13 @@ export default function ReportGeneration({
             .in("status", ["approved", "paid"]);
 
           const totalFunds =
-            funds?.reduce((sum, f) => sum + (f.amount || 0), 0) || 0;
+            funds?.reduce((sum: number, f: any) => sum + (f.amount || 0), 0) ||
+            0;
           const totalExpenses =
-            expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+            expenses?.reduce(
+              (sum: number, e: any) => sum + (e.amount || 0),
+              0,
+            ) || 0;
 
           excelContent += `
             <tr class="header"><td colspan="6"><b>Financial Summary</b></td></tr>
@@ -968,7 +981,7 @@ export default function ReportGeneration({
           });
         }
       } catch (dataError) {
-        excelContent += `<tr><td>Error</td><td>Unable to fetch real data</td><td>${dataError.message || "Unknown"}</td><td></td><td></td><td></td></tr>`;
+        excelContent += `<tr><td>Error</td><td>Unable to fetch real data</td><td>${(dataError as Error).message || "Unknown"}</td><td></td><td></td><td></td></tr>`;
       }
 
       excelContent += `
