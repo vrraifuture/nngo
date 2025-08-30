@@ -91,7 +91,7 @@ const sanitizeInput = (input: string): string => {
 
 // Enhanced content validation
 const validateContent = (content: string, minLength: number = 100): boolean => {
-  return content && content.trim().length >= minLength;
+  return !!(content && content.trim().length >= minLength);
 };
 
 // Generate real data content for reports
