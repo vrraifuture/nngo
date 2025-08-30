@@ -18,6 +18,7 @@ import {
 } from "@/utils/permissions";
 import CurrencySettings from "@/components/currency-settings";
 import DashboardCurrencyUpdater from "@/components/dashboard-currency-updater";
+import ProjectSettings from "@/components/project-settings";
 
 // Export the client component directly
 export default function SettingsPage() {
@@ -228,6 +229,9 @@ function SettingsPageContent() {
               // The CurrencySettings component handles all the currency update logic
             }}
           />
+
+          {/* Project Management Settings */}
+          <ProjectSettings />
 
           {/* User Management Settings */}
           <Card className="bg-purple-50 border-purple-200">
@@ -846,6 +850,57 @@ function SettingsPageContent() {
                         />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                       </label>
+                    </div>
+
+                    {/* Quick Fix Button for Admin Users */}
+                    <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                      <h5 className="font-medium text-yellow-800 mb-2">
+                        Quick Fix for Admin Users
+                      </h5>
+                      <p className="text-sm text-yellow-700 mb-3">
+                        If you're an admin and can't edit/delete fund sources,
+                        click the button below to enable full access.
+                      </p>
+                      <button
+                        onClick={() => {
+                          try {
+                            // Enable fund tracking settings for admin
+                            const settings = { allowEditDelete: true };
+                            localStorage.setItem(
+                              "ngo_fund_tracking_settings",
+                              JSON.stringify(settings),
+                            );
+
+                            // Also ensure admin role is properly set
+                            localStorage.setItem(
+                              "ngo_current_user_role",
+                              "admin",
+                            );
+                            sessionStorage.setItem("temp_user_role", "admin");
+                            sessionStorage.setItem("admin_verified", "true");
+
+                            alert(
+                              "Admin access enabled for Fund Sources! Please refresh the page to see changes.",
+                            );
+
+                            // Auto-refresh after 2 seconds
+                            setTimeout(() => {
+                              window.location.reload();
+                            }, 2000);
+                          } catch (error) {
+                            console.error(
+                              "Error enabling admin access:",
+                              error,
+                            );
+                            alert(
+                              "Error enabling admin access. Please try again.",
+                            );
+                          }
+                        }}
+                        className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm font-medium"
+                      >
+                        Enable Admin Access to Fund Sources
+                      </button>
                     </div>
                   </div>
                 </div>

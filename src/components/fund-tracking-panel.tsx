@@ -112,9 +112,12 @@ export default function FundTrackingPanel({
     fetchFunds();
     fetchDonors();
     fetchProjects();
+  }, []);
+
+  useEffect(() => {
     checkPermissions();
     loadSettings();
-  }, []);
+  }, [userRole]);
 
   const loadSettings = () => {
     try {
@@ -122,9 +125,36 @@ export default function FundTrackingPanel({
       if (settings) {
         const parsed = JSON.parse(settings);
         setAllowEditDelete(parsed.allowEditDelete || false);
+      } else {
+        // Default to true for admin users if no settings exist
+        const defaultValue = userRole === "admin";
+        setAllowEditDelete(defaultValue);
+        // Auto-save default settings for admin users
+        if (userRole === "admin") {
+          localStorage.setItem(
+            "ngo_fund_tracking_settings",
+            JSON.stringify({ allowEditDelete: true }),
+          );
+        }
       }
+      console.log(
+        `Fund Sources settings - AllowEditDelete: ${allowEditDelete}, UserRole: ${userRole}`,
+      );
     } catch (error) {
       console.error("Error loading fund tracking settings:", error);
+      // Default to true for admin users
+      const defaultValue = userRole === "admin";
+      setAllowEditDelete(defaultValue);
+      if (userRole === "admin") {
+        try {
+          localStorage.setItem(
+            "ngo_fund_tracking_settings",
+            JSON.stringify({ allowEditDelete: true }),
+          );
+        } catch (e) {
+          console.error("Error saving default settings:", e);
+        }
+      }
     }
   };
 
@@ -134,12 +164,18 @@ export default function FundTrackingPanel({
 
   const checkPermissions = async () => {
     try {
-      // Use the state-based approach since you're already tracking canManage in state
-      const result = canManageBudgetsSync();
+      // Check if user is admin or has budget management permissions
+      const isAdminUser = userRole === "admin";
+      const hasBudgetPermission = canManageBudgetsSync();
+      const result = isAdminUser || hasBudgetPermission;
       setCanManage(result);
+      console.log(
+        `Fund Sources permissions - Role: ${userRole}, Admin: ${isAdminUser}, CanManage: ${result}`,
+      );
     } catch (error) {
       console.error("Error checking permissions:", error);
-      setCanManage(false);
+      // Default to true for admin users even if permission check fails
+      setCanManage(userRole === "admin");
     }
   };
 
@@ -240,6 +276,16 @@ export default function FundTrackingPanel({
       </div>
     );
   }
+
+  // Debug information for troubleshooting
+  console.log("Fund Sources Debug Info:", {
+    userRole,
+    canManage,
+    allowEditDelete,
+    isAdmin: userRole === "admin",
+    showActions: canManage || userRole === "admin",
+    showEditDelete: allowEditDelete || userRole === "admin",
+  });
 
   const handleEditFund = (fund: FundSource) => {
     setEditingFund(fund);
@@ -379,7 +425,7 @@ export default function FundTrackingPanel({
                 Unrestricted
               </Button>
 
-              {canManage && (
+              {(canManage || userRole === "admin") && (
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
                     <Button className="flex items-center gap-2">
@@ -1023,7 +1069,9 @@ export default function FundTrackingPanel({
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Received Date</TableHead>
-                {canManage && <TableHead>Actions</TableHead>}
+                {(canManage || userRole === "admin") && (
+                  <TableHead>Actions</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1055,31 +1103,30 @@ export default function FundTrackingPanel({
                   <TableCell>
                     {new Date(fund.received_date).toLocaleDateString()}
                   </TableCell>
-                  {canManage && allowEditDelete && (
+                  {(canManage || userRole === "admin") && (
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditFund(fund)}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteFund(fund.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  )}
-                  {canManage && !allowEditDelete && (
-                    <TableCell>
-                      <span className="text-sm text-gray-500">View Only</span>
+                      {allowEditDelete || userRole === "admin" ? (
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditFund(fund)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteFund(fund.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">View Only</span>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>
