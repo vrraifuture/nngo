@@ -315,6 +315,124 @@ export const createFundSourceAction = async (formData: FormData) => {
   );
 };
 
+export const deleteFundSourceAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const fundId = formData.get("fund_id")?.toString();
+
+    if (!fundId) {
+      return {
+        success: false,
+        error: "Fund ID is required",
+      };
+    }
+
+    const { error } = await supabase
+      .from("fund_sources")
+      .delete()
+      .eq("id", fundId);
+
+    if (error) {
+      console.error("Error deleting fund source:", error);
+      return {
+        success: false,
+        error: "Failed to delete fund source: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Fund source deleted successfully",
+    };
+  } catch (error) {
+    console.error("Error in deleteFundSourceAction:", error);
+    return {
+      success: false,
+      error: "Failed to delete fund source",
+    };
+  }
+};
+
+export const updateFundSourceAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const fundId = formData.get("fund_id")?.toString();
+    const name = formData.get("name")?.toString();
+    const amount = parseFloat(formData.get("amount")?.toString() || "0");
+    const currency = formData.get("currency")?.toString();
+    const is_restricted = formData.get("is_restricted") === "true";
+    const donor_id = formData.get("donor_id")?.toString();
+    const project_id = formData.get("project_id")?.toString();
+    const restrictions = formData.get("restrictions")?.toString();
+    const received_date = formData.get("received_date")?.toString();
+
+    if (!fundId || !name || !amount) {
+      return {
+        success: false,
+        error: "Fund ID, name, and amount are required",
+      };
+    }
+
+    const { error } = await supabase
+      .from("fund_sources")
+      .update({
+        name,
+        amount,
+        currency,
+        is_restricted,
+        donor_id: donor_id || null,
+        project_id: project_id || null,
+        restrictions: restrictions || null,
+        received_date,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", fundId);
+
+    if (error) {
+      console.error("Error updating fund source:", error);
+      return {
+        success: false,
+        error: "Failed to update fund source: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Fund source updated successfully",
+    };
+  } catch (error) {
+    console.error("Error in updateFundSourceAction:", error);
+    return {
+      success: false,
+      error: "Failed to update fund source",
+    };
+  }
+};
+
 export const createExpenseAction = async (formData: FormData) => {
   const supabase = await createClient();
   const {
@@ -1935,6 +2053,159 @@ export const updateRolePermissionAction = _updateRolePermissionAction;
 export const initializeDefaultPermissionsAction =
   _initializeDefaultPermissionsAction;
 
+// Clear sample ledger data action
+export const clearSampleLedgerDataAction = async () => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    // Delete entries with sample reference numbers
+    const { error } = await supabase
+      .from("ledger_entries")
+      .delete()
+      .or(
+        "reference_number.like.SAMPLE-%,reference_number.in.(DON-001,EXP-001)",
+      );
+
+    if (error) {
+      console.error("Error clearing sample ledger data:", error);
+      return {
+        success: false,
+        error: "Failed to clear sample data: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Sample ledger data cleared successfully",
+    };
+  } catch (error) {
+    console.error("Error in clearSampleLedgerDataAction:", error);
+    return {
+      success: false,
+      error: "Failed to clear sample data",
+    };
+  }
+};
+
+export const deleteBudgetAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const budgetId = formData.get("budget_id")?.toString();
+
+    if (!budgetId) {
+      return {
+        success: false,
+        error: "Budget ID is required",
+      };
+    }
+
+    const { error } = await supabase
+      .from("budgets")
+      .delete()
+      .eq("id", budgetId);
+
+    if (error) {
+      console.error("Error deleting budget:", error);
+      return {
+        success: false,
+        error: "Failed to delete budget: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Budget deleted successfully",
+    };
+  } catch (error) {
+    console.error("Error in deleteBudgetAction:", error);
+    return {
+      success: false,
+      error: "Failed to delete budget",
+    };
+  }
+};
+
+export const clearSampleBudgetDataAction = async () => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    // Delete sample budgets
+    const { error: budgetError } = await supabase
+      .from("budgets")
+      .delete()
+      .like("name", "SAMPLE:%");
+
+    // Delete sample budget categories
+    const { error: categoryError } = await supabase
+      .from("budget_categories")
+      .delete()
+      .in("name", ["Program Expenses", "Administrative Expenses", "Personnel"]);
+
+    // Delete sample organization
+    const { error: orgError } = await supabase
+      .from("organizations")
+      .delete()
+      .eq("name", "Sample NGO");
+
+    if (budgetError || categoryError || orgError) {
+      console.error("Error clearing sample budget data:", {
+        budgetError,
+        categoryError,
+        orgError,
+      });
+      return {
+        success: false,
+        error: "Failed to clear some sample data",
+      };
+    }
+
+    return {
+      success: true,
+      message: "Sample budget data cleared successfully",
+    };
+  } catch (error) {
+    console.error("Error in clearSampleBudgetDataAction:", error);
+    return {
+      success: false,
+      error: "Failed to clear sample data",
+    };
+  }
+};
+
 // Action to assign role to existing user
 export const assignUserRoleAction = async (formData: FormData) => {
   const supabase = await createClient();
@@ -2309,6 +2580,321 @@ export const deleteProjectAction = async (formData: FormData) => {
     return {
       success: false,
       error: "Failed to delete project",
+    };
+  }
+};
+
+// Ledger Entry Management Actions
+export const createLedgerEntryAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const account_code = formData.get("account_code")?.toString();
+    const account_name = formData.get("account_name")?.toString();
+    const date = formData.get("date")?.toString();
+    const description = formData.get("description")?.toString();
+    const debit = parseFloat(formData.get("debit")?.toString() || "0");
+    const credit = parseFloat(formData.get("credit")?.toString() || "0");
+    const reference_number = formData.get("reference_number")?.toString();
+
+    if (!account_code || !account_name || !date || !description) {
+      return {
+        success: false,
+        error: "Account code, account name, date, and description are required",
+      };
+    }
+
+    if (debit === 0 && credit === 0) {
+      return {
+        success: false,
+        error: "Either debit or credit amount must be greater than 0",
+      };
+    }
+
+    if (debit > 0 && credit > 0) {
+      return {
+        success: false,
+        error: "Cannot have both debit and credit amounts",
+      };
+    }
+
+    const { error } = await supabase.from("ledger_entries").insert({
+      account_code,
+      account_name,
+      date,
+      description,
+      debit,
+      credit,
+      reference_number: reference_number || null,
+      created_by: user.id,
+    });
+
+    if (error) {
+      console.error("Error creating ledger entry:", error);
+      return {
+        success: false,
+        error: "Failed to create ledger entry: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Ledger entry created successfully",
+    };
+  } catch (error) {
+    console.error("Error in createLedgerEntryAction:", error);
+    return {
+      success: false,
+      error: "Failed to create ledger entry",
+    };
+  }
+};
+
+export const updateLedgerEntryAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const entry_id = formData.get("entry_id")?.toString();
+    const account_code = formData.get("account_code")?.toString();
+    const account_name = formData.get("account_name")?.toString();
+    const date = formData.get("date")?.toString();
+    const description = formData.get("description")?.toString();
+    const debit = parseFloat(formData.get("debit")?.toString() || "0");
+    const credit = parseFloat(formData.get("credit")?.toString() || "0");
+    const reference_number = formData.get("reference_number")?.toString();
+
+    if (!entry_id || !account_code || !account_name || !date || !description) {
+      return {
+        success: false,
+        error:
+          "Entry ID, account code, account name, date, and description are required",
+      };
+    }
+
+    if (debit === 0 && credit === 0) {
+      return {
+        success: false,
+        error: "Either debit or credit amount must be greater than 0",
+      };
+    }
+
+    if (debit > 0 && credit > 0) {
+      return {
+        success: false,
+        error: "Cannot have both debit and credit amounts",
+      };
+    }
+
+    const { error } = await supabase
+      .from("ledger_entries")
+      .update({
+        account_code,
+        account_name,
+        date,
+        description,
+        debit,
+        credit,
+        reference_number: reference_number || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entry_id);
+
+    if (error) {
+      console.error("Error updating ledger entry:", error);
+      return {
+        success: false,
+        error: "Failed to update ledger entry: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Ledger entry updated successfully",
+    };
+  } catch (error) {
+    console.error("Error in updateLedgerEntryAction:", error);
+    return {
+      success: false,
+      error: "Failed to update ledger entry",
+    };
+  }
+};
+
+export const deleteLedgerEntryAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const entry_id = formData.get("entry_id")?.toString();
+
+    if (!entry_id) {
+      return {
+        success: false,
+        error: "Entry ID is required",
+      };
+    }
+
+    const { error } = await supabase
+      .from("ledger_entries")
+      .delete()
+      .eq("id", entry_id);
+
+    if (error) {
+      console.error("Error deleting ledger entry:", error);
+      return {
+        success: false,
+        error: "Failed to delete ledger entry: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Ledger entry deleted successfully",
+    };
+  } catch (error) {
+    console.error("Error in deleteLedgerEntryAction:", error);
+    return {
+      success: false,
+      error: "Failed to delete ledger entry",
+    };
+  }
+};
+
+export const createBatchLedgerEntriesAction = async (formData: FormData) => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return {
+        success: false,
+        error: "User not authenticated",
+      };
+    }
+
+    const entriesJson = formData.get("entries")?.toString();
+    const batchDate = formData.get("batch_date")?.toString();
+
+    if (!entriesJson || !batchDate) {
+      return {
+        success: false,
+        error: "Entries data and batch date are required",
+      };
+    }
+
+    let entries;
+    try {
+      entries = JSON.parse(entriesJson);
+    } catch (parseError) {
+      return {
+        success: false,
+        error: "Invalid entries data format",
+      };
+    }
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return {
+        success: false,
+        error: "At least one entry is required",
+      };
+    }
+
+    // Validate entries
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (!entry.account_code || !entry.description) {
+        return {
+          success: false,
+          error: `Entry ${i + 1}: Account code and description are required`,
+        };
+      }
+
+      const debit = parseFloat(entry.debit || "0");
+      const credit = parseFloat(entry.credit || "0");
+
+      if (debit === 0 && credit === 0) {
+        return {
+          success: false,
+          error: `Entry ${i + 1}: Either debit or credit amount must be greater than 0`,
+        };
+      }
+
+      if (debit > 0 && credit > 0) {
+        return {
+          success: false,
+          error: `Entry ${i + 1}: Cannot have both debit and credit amounts`,
+        };
+      }
+    }
+
+    // Prepare entries for insertion
+    const entriesForDB = entries.map((entry) => ({
+      account_code: entry.account_code,
+      account_name: entry.account_name || "Unknown Account",
+      date: batchDate,
+      description: entry.description,
+      debit: parseFloat(entry.debit || "0"),
+      credit: parseFloat(entry.credit || "0"),
+      reference_number: entry.reference_number || null,
+      created_by: user.id,
+    }));
+
+    const { error } = await supabase
+      .from("ledger_entries")
+      .insert(entriesForDB);
+
+    if (error) {
+      console.error("Error creating batch ledger entries:", error);
+      return {
+        success: false,
+        error: "Failed to create batch ledger entries: " + error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: `Successfully created ${entries.length} ledger entries`,
+    };
+  } catch (error) {
+    console.error("Error in createBatchLedgerEntriesAction:", error);
+    return {
+      success: false,
+      error: "Failed to create batch ledger entries",
     };
   }
 };

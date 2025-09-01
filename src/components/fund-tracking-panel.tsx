@@ -47,7 +47,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { createFundSourceAction } from "@/app/actions";
+import {
+  createFundSourceAction,
+  deleteFundSourceAction,
+  updateFundSourceAction,
+} from "@/app/actions";
 import {
   canManageBudgetsSync,
   canViewFinancesSync,
@@ -319,15 +323,17 @@ export default function FundTrackingPanel({
     }
 
     try {
-      const { error } = await supabase
-        .from("fund_sources")
-        .delete()
-        .eq("id", fundId);
+      const formData = new FormData();
+      formData.append("fund_id", fundId);
 
-      if (error) throw error;
+      const result = await deleteFundSourceAction(formData);
 
-      fetchFunds();
-      alert("Fund source deleted successfully!");
+      if (result.success) {
+        fetchFunds();
+        alert(result.message);
+      } else {
+        alert(result.error);
+      }
     } catch (error) {
       console.error("Error deleting fund:", error);
       alert("Error deleting fund source. Please try again.");
@@ -917,26 +923,18 @@ export default function FundTrackingPanel({
                 e.preventDefault();
                 try {
                   const formData = new FormData(e.currentTarget);
-                  const { error } = await supabase
-                    .from("fund_sources")
-                    .update({
-                      name: formData.get("name"),
-                      amount: parseFloat(formData.get("amount") as string),
-                      currency: formData.get("currency"),
-                      donor_id: formData.get("donor_id") || null,
-                      project_id: formData.get("project_id") || null,
-                      received_date: formData.get("received_date"),
-                      is_restricted: formData.get("is_restricted") === "true",
-                      restrictions: formData.get("restrictions") || null,
-                    })
-                    .eq("id", editingFund.id);
+                  formData.append("fund_id", editingFund.id);
 
-                  if (error) throw error;
+                  const result = await updateFundSourceAction(formData);
 
-                  fetchFunds();
-                  setShowEditDialog(false);
-                  setEditingFund(null);
-                  alert("Fund source updated successfully!");
+                  if (result.success) {
+                    fetchFunds();
+                    setShowEditDialog(false);
+                    setEditingFund(null);
+                    alert(result.message);
+                  } else {
+                    alert(result.error);
+                  }
                 } catch (error) {
                   console.error("Error updating fund:", error);
                   alert("Error updating fund source. Please try again.");

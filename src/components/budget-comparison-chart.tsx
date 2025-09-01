@@ -60,7 +60,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createBudgetAction } from "@/app/actions";
+import {
+  createBudgetAction,
+  deleteBudgetAction,
+  clearSampleBudgetDataAction,
+} from "@/app/actions";
 import {
   canManageBudgetsSync,
   canEditBudgetsSync,
@@ -230,20 +234,18 @@ export default function BudgetComparisonChart({
     }
 
     try {
-      const { error } = await supabase
-        .from("budgets")
-        .delete()
-        .eq("id", budgetId);
+      const formData = new FormData();
+      formData.append("budget_id", budgetId);
 
-      if (error) {
-        console.error("Error deleting budget:", error);
-        alert("Failed to delete budget. Please try again.");
-        return;
+      const result = await deleteBudgetAction(formData);
+
+      if (result.success) {
+        alert(result.message);
+        await fetchBudgets();
+        await fetchBudgetData();
+      } else {
+        alert(result.error);
       }
-
-      alert("Budget deleted successfully!");
-      await fetchBudgets();
-      await fetchBudgetData();
     } catch (error) {
       console.error("Error deleting budget:", error);
       alert("Failed to delete budget. Please try again.");
@@ -269,31 +271,7 @@ export default function BudgetComparisonChart({
 
       if (budgetError) {
         console.error("Budget fetch error:", budgetError);
-        // Use fallback sample data for demonstration
-        const sampleData: BudgetData[] = [
-          {
-            category: "Program Expenses",
-            planned: 50000,
-            actual: 45000,
-            variance: -5000,
-            variancePercent: -10,
-          },
-          {
-            category: "Administrative",
-            planned: 25000,
-            actual: 28000,
-            variance: 3000,
-            variancePercent: 12,
-          },
-          {
-            category: "Personnel",
-            planned: 80000,
-            actual: 75000,
-            variance: -5000,
-            variancePercent: -6.25,
-          },
-        ];
-        setBudgetData(sampleData);
+        setBudgetData([]);
         setLoading(false);
         return;
       }
@@ -399,32 +377,9 @@ export default function BudgetComparisonChart({
         Array.from(budgetsByCategory.entries()),
       );
 
-      // If no data from database, use sample data
+      // If no data from database, show empty state
       if (budgetsByCategory.size === 0) {
-        const sampleData: BudgetData[] = [
-          {
-            category: "Program Expenses",
-            planned: 50000,
-            actual: 45000,
-            variance: -5000,
-            variancePercent: -10,
-          },
-          {
-            category: "Administrative",
-            planned: 25000,
-            actual: 28000,
-            variance: 3000,
-            variancePercent: 12,
-          },
-          {
-            category: "Personnel",
-            planned: 80000,
-            actual: 75000,
-            variance: -5000,
-            variancePercent: -6.25,
-          },
-        ];
-        setBudgetData(sampleData);
+        setBudgetData([]);
         setLoading(false);
         return;
       }
@@ -449,31 +404,7 @@ export default function BudgetComparisonChart({
       setBudgetData(formattedData);
     } catch (error) {
       console.error("Error fetching budget data:", error);
-      // Use fallback sample data
-      const sampleData: BudgetData[] = [
-        {
-          category: "Program Expenses",
-          planned: 50000,
-          actual: 45000,
-          variance: -5000,
-          variancePercent: -10,
-        },
-        {
-          category: "Administrative",
-          planned: 25000,
-          actual: 28000,
-          variance: 3000,
-          variancePercent: 12,
-        },
-        {
-          category: "Personnel",
-          planned: 80000,
-          actual: 75000,
-          variance: -5000,
-          variancePercent: -6.25,
-        },
-      ];
-      setBudgetData(sampleData);
+      setBudgetData([]);
     } finally {
       setLoading(false);
     }
@@ -945,6 +876,34 @@ export default function BudgetComparisonChart({
                 <Download className="h-4 w-4" />
                 Export Data
               </Button>
+
+              {canManageBudgetsSync() && (
+                <Button
+                  onClick={async () => {
+                    if (
+                      confirm(
+                        "Are you sure you want to clear all sample budget data? This will remove sample budgets, categories, and organizations.",
+                      )
+                    ) {
+                      const result = await clearSampleBudgetDataAction();
+                      if (result.success) {
+                        await fetchBudgets();
+                        await fetchBudgetData();
+                        await fetchCategories();
+                        await fetchProjects();
+                        alert(result.message);
+                      } else {
+                        alert(result.error);
+                      }
+                    }
+                  }}
+                  variant="outline"
+                  className="flex items-center gap-2 text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Clear Sample Data
+                </Button>
+              )}
 
               {canManageBudgetsSync() && (
                 <>
