@@ -974,6 +974,7 @@ export default function GeneralLedger({
           id: `local_${Date.now()}`,
           created_at: new Date().toISOString(),
           reference_number: entryForDB.reference_number || undefined,
+          created_by: entryForDB.created_by || undefined,
         };
         const newEntries: LedgerEntry[] = [...ledgerEntries, entryWithId];
         setLedgerEntries(newEntries);
@@ -1002,9 +1003,9 @@ export default function GeneralLedger({
       setShowAddDialog(false);
     } catch (error) {
       console.error("Error in single entry submission process:", error);
-      alert(
-        `Failed to add ledger entry: ${error.message || error}. Please try again.`,
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(`Failed to add ledger entry: ${errorMessage}. Please try again.`);
     }
   };
 
