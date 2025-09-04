@@ -124,7 +124,7 @@ export const signInAction = async (formData: FormData) => {
         );
 
         // Check if user is a super admin
-        const SUPER_ADMIN_EMAILS = ["abdousentore@gmail.com"];
+        const SUPER_ADMIN_EMAILS: string[] = []; // No super admins defined
         const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(
           data.user.email?.toLowerCase() || "",
         );

@@ -1,16 +1,20 @@
--- Grant admin access to abdousentore@gmail.com
--- This migration ensures the user has admin access across all organizations
+-- Grant admin access to specified email (DISABLED)
+-- This migration was used to ensure a user has admin access across all organizations
+-- Currently disabled - no automatic admin access granted
 
--- First, get the user ID for abdousentore@gmail.com
-DO $$
+-- First, get the user ID for the specified email (DISABLED)
+DO $
 DECLARE
     target_user_id UUID;
     org_record RECORD;
 BEGIN
-    -- Get the user ID for abdousentore@gmail.com
-    SELECT id INTO target_user_id 
-    FROM auth.users 
-    WHERE email = 'abdousentore@gmail.com';
+    -- Get the user ID for the specified email (DISABLED)
+    -- SELECT id INTO target_user_id 
+    -- FROM auth.users 
+    -- WHERE email = 'abdousentore@gmail.com';
+    
+    -- Migration disabled - no automatic admin access
+    target_user_id := NULL;
     
     -- Only proceed if user exists
     IF target_user_id IS NOT NULL THEN
@@ -36,9 +40,9 @@ BEGIN
                 updated_at = NOW();
         END LOOP;
         
-        RAISE NOTICE 'Admin access granted to abdousentore@gmail.com for all organizations';
+        RAISE NOTICE 'Admin access migration disabled - no automatic admin access granted';
     ELSE
-        RAISE NOTICE 'User abdousentore@gmail.com not found in auth.users table';
+        RAISE NOTICE 'Admin access migration disabled - no user processing';
     END IF;
 END $$;
 
@@ -57,10 +61,13 @@ DECLARE
     target_user_id UUID;
     default_org_id UUID;
 BEGIN
-    -- Get the user ID for abdousentore@gmail.com
-    SELECT id INTO target_user_id 
-    FROM auth.users 
-    WHERE email = 'abdousentore@gmail.com';
+    -- Get the user ID for the specified email (DISABLED)
+    -- SELECT id INTO target_user_id 
+    -- FROM auth.users 
+    -- WHERE email = 'abdousentore@gmail.com';
+    
+    -- Migration disabled
+    target_user_id := NULL;
     
     -- Get the default organization ID
     SELECT id INTO default_org_id 
@@ -83,6 +90,6 @@ BEGIN
             role = 'admin',
             updated_at = NOW();
             
-        RAISE NOTICE 'Admin access granted to abdousentore@gmail.com for default organization';
+        RAISE NOTICE 'Admin access migration disabled for default organization';
     END IF;
 END $$;

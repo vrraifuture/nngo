@@ -8,7 +8,7 @@ const CACHE_DURATION = 30 * 1000; // 30 seconds for faster updates
 
 // Define super admin users - these users should always have admin access
 const SUPER_ADMIN_EMAILS = [
-  "abdousentore@gmail.com",
+  // "abdousentore@gmail.com", // Commented out - no longer super admin
   // Add more super admin emails here as needed
 ];
 

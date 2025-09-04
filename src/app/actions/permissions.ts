@@ -21,7 +21,7 @@ export const getUserRoleAction = async () => {
     }
 
     // Check if user is super admin
-    const SUPER_ADMIN_EMAILS = ["abdousentore@gmail.com"];
+    const SUPER_ADMIN_EMAILS: string[] = []; // No super admins defined
     const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(
       user.email?.toLowerCase() || "",
     );
@@ -156,7 +156,7 @@ export const updateRolePermissionAction = async (formData: FormData) => {
     }
 
     // Check if user has permission to manage settings (allow super admins)
-    const SUPER_ADMIN_EMAILS = ["abdousentore@gmail.com"];
+    const SUPER_ADMIN_EMAILS: string[] = []; // No super admins defined
     const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(
       user.email?.toLowerCase() || "",
     );

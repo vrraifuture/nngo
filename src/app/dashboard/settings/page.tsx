@@ -169,9 +169,9 @@ function SettingsPageContent() {
       console.log("Authenticated user:", user.id, user.email);
 
       // Define super admin users
-      const SUPER_ADMIN_EMAILS = [
-        "abdousentore@gmail.com",
-        // Add more super admin emails here as needed
+      const SUPER_ADMIN_EMAILS: string[] = [
+        // No super admin emails defined
+        // Add super admin emails here as needed
       ];
 
       // Check if user is a super admin
