@@ -140,7 +140,13 @@ export default function ExpenseManagement({
             type: "credit_card",
             is_active: true,
           },
-          { id: "4", name: "MOMO Pay", type: "mobile_money", is_active: true },
+          {
+            id: "4",
+            name: "Cheque",
+            type: "cheque",
+            is_active: true,
+          },
+          { id: "5", name: "MOMO Pay", type: "mobile_money", is_active: true },
         ];
         setPaymentMethods(defaultMethods);
       }

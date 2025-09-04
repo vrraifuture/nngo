@@ -67,5 +67,6 @@ INSERT INTO payment_methods (name, type, is_active) VALUES
 ('Cash', 'cash', true),
 ('Bank Transfer', 'bank_transfer', true),
 ('Credit Card', 'credit_card', true),
+('Cheque', 'cheque', true),
 ('MOMO Pay', 'mobile_money', true)
 ON CONFLICT DO NOTHING;
